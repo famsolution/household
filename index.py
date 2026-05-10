@@ -110,10 +110,25 @@ st.markdown("""
     }
 
     /* 입력창 및 위젯 배경 화이트 고정 */
-    input, select, textarea, [data-testid="stNumberInput"], [data-testid="stTextInput"] {
+    input, select, textarea, [data-testid="stNumberInput"], [data-testid="stTextInput"], [data-testid="stSelectbox"] {
         background-color: #ffffff !important;
         color: #191f28 !important;
         border-color: #e5e8eb !important;
+    }
+
+    /* 드롭다운 메뉴(Selectbox) 팝업 배경 화이트 고정 */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], div[role="listbox"] {
+        background-color: #ffffff !important;
+        color: #191f28 !important;
+    }
+    
+    /* 드롭다운 개별 항목 스타일 */
+    div[data-baseweb="option"] {
+        background-color: #ffffff !important;
+        color: #191f28 !important;
+    }
+    div[data-baseweb="option"]:hover {
+        background-color: #f2f4f6 !important;
     }
 
     /* 탭(Tab) 디자인 */
@@ -148,11 +163,23 @@ st.markdown("""
         border: 1px solid #ffffff !important;
     }
 
-    /* 메인 버튼 */
-    button[kind="primaryFormSubmit"], button[kind="primary"] {
+    /* 메인 및 모든 버튼 텍스트 화이트 고정 */
+    button, button p, button span {
+        color: #ffffff !important;
+    }
+    
+    button[kind="primaryFormSubmit"], button[kind="primary"], [data-testid="baseButton-primary"] {
         background-color: #3182f6 !important;
         color: #ffffff !important;
         border-radius: 16px !important;
+    }
+    
+    /* 일반 버튼도 배경색이 있는 경우를 대비해 텍스트 화이트 고정 */
+    [data-testid="baseButton-secondary"] {
+        color: #ffffff !important;
+        background-color: #3182f6 !important; /* 일반 버튼도 파란색으로 통일하여 가독성 확보 */
+        border-radius: 16px !important;
+        border: none !important;
     }
 
     /* 대시보드 카드 */
@@ -240,15 +267,24 @@ with tab_dashboard:
         with c_left:
             st.markdown("<h4 style='color: #333d4b;'>항목별 비중</h4>", unsafe_allow_html=True)
             fig_p = px.pie(df_exp, values='금액', names='분류', hole=0.45, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_p.update_layout(margin=dict(t=0, b=0, l=0, r=0), showlegend=False)
+            fig_p.update_layout(
+                margin=dict(t=20, b=20, l=20, r=20), 
+                showlegend=False,
+                paper_bgcolor='#f2f4f6',
+                plot_bgcolor='#f2f4f6'
+            )
             st.plotly_chart(fig_p, use_container_width=True)
         with c_right:
             st.markdown("<h4 style='color: #333d4b;'>일자별 흐름</h4>", unsafe_allow_html=True)
             daily = df_exp.groupby('날짜')['금액'].sum().reset_index()
             fig_b = px.bar(daily, x='날짜', y='금액')
             fig_b.update_traces(marker_color='#3182f6', marker_line_width=0, opacity=0.9)
-            fig_b.update_layout(margin=dict(t=0, b=0, l=0, r=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-            fig_b.update_yaxes(showgrid=True, gridcolor='#f2f4f6')
+            fig_b.update_layout(
+                margin=dict(t=20, b=20, l=20, r=20), 
+                plot_bgcolor='#f2f4f6', 
+                paper_bgcolor='#f2f4f6'
+            )
+            fig_b.update_yaxes(showgrid=True, gridcolor='#ffffff')
             st.plotly_chart(fig_b, use_container_width=True)
             
         st.markdown("### 📋 항목별 상세 (눌러서 펼치기)")
