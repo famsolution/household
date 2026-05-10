@@ -151,6 +151,17 @@ st.markdown("""
         background-color: #f2f4f6 !important;
     }
 
+    /* 텍스트 입력창 및 숫자 입력창 대비 강화 */
+    input, textarea, [data-testid="stTextInput"] div, [data-testid="stNumberInput"] div {
+        background-color: #ffffff !important;
+        color: #191f28 !important;
+    }
+    /* 입력창 내부 실제 텍스트 강제 */
+    input {
+        color: #191f28 !important;
+        -webkit-text-fill-color: #191f28 !important; /* iOS/Safari 대응 */
+    }
+
     /* 차트 및 기타 요소 */
     .toss-card {
         background-color: #ffffff !important;
