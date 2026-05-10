@@ -26,8 +26,8 @@ if not st.session_state["password_correct"]:
         pwd = st.text_input("비밀번호 입력", type="password", label_visibility="collapsed", placeholder="비밀번호를 입력하세요")
         
         if st.button("가계부 열기", use_container_width=True, type="primary"):
-            # 💡 "1234" 부분을 원하는 비밀번호로 수정하세요
-            if pwd == "1234": 
+            # 💡 비밀번호를 수정했습니다.
+            if pwd == "210327": 
                 st.session_state["password_correct"] = True
                 st.rerun()
             else:
@@ -83,31 +83,102 @@ else:
     all_categories = DEFAULT_CATS
 
 # ==========================================
-# 🎨 트렌디한 UI/CSS 전면 개편
+# 🎨 트렌디한 UI/CSS 전면 개편 (다크모드 강제 화이트 고정)
 # ==========================================
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    * { font-family: 'Pretendard', sans-serif !important; }
-    .stApp { background-color: #f9fafb; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #f2f4f6; padding: 6px; border-radius: 16px; border: none; }
-    .stTabs [data-baseweb="tab"] { background-color: transparent; border-radius: 12px; height: 48px; padding: 0 24px; font-weight: 700; color: #8b95a1; border: none; }
-    .stTabs [aria-selected="true"] { background-color: #ffffff !important; box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important; color: #191f28 !important; }
-    [data-testid="stForm"] { background-color: #ffffff; padding: 30px; border-radius: 24px; box-shadow: 0 8px 30px rgba(0,0,0,0.03); border: 1px solid #ffffff; }
-    button[kind="primaryFormSubmit"], button[kind="primary"] {
-        background-color: #3182f6 !important; color: white !important; border-radius: 16px !important;
-        height: 60px !important; font-size: 18px !important; font-weight: 700 !important; border: none !important;
-        box-shadow: 0 4px 14px rgba(49, 130, 246, 0.25) !important; transition: all 0.2s ease; margin-top: 15px;
+    
+    /* 1. 다크모드 무시하고 화이트 테마 강제 고정 */
+    :root {
+        --primary-color: #3182f6;
+        --background-color: #f9fafb;
+        --secondary-background-color: #ffffff;
+        --text-color: #191f28;
     }
+
+    /* 모든 텍스트와 배경을 화이트 모드로 고정 */
+    html, body, [data-testid="stAppViewContainer"], .stApp {
+        background-color: #f9fafb !important;
+        color: #191f28 !important;
+        font-family: 'Pretendard', sans-serif !important;
+    }
+
+    /* 다크모드 브라우저 대응: 모든 텍스트 색상 강제 */
+    h1, h2, h3, h4, p, span, div, label, .stMarkdown {
+        color: #191f28 !important;
+    }
+
+    /* 입력창 및 위젯 배경 화이트 고정 */
+    input, select, textarea, [data-testid="stNumberInput"], [data-testid="stTextInput"] {
+        background-color: #ffffff !important;
+        color: #191f28 !important;
+        border-color: #e5e8eb !important;
+    }
+
+    /* 탭(Tab) 디자인 */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f2f4f6 !important;
+        padding: 6px;
+        border-radius: 16px;
+        border: none;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent !important;
+        border-radius: 12px;
+        height: 48px;
+        padding: 0 24px;
+        font-weight: 700;
+        color: #8b95a1 !important;
+        border: none;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+        color: #191f28 !important;
+    }
+
+    /* 폼(Form) 카드 디자인 */
+    [data-testid="stForm"] {
+        background-color: #ffffff !important;
+        padding: 30px;
+        border-radius: 24px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.03) !important;
+        border: 1px solid #ffffff !important;
+    }
+
+    /* 메인 버튼 */
+    button[kind="primaryFormSubmit"], button[kind="primary"] {
+        background-color: #3182f6 !important;
+        color: #ffffff !important;
+        border-radius: 16px !important;
+    }
+
+    /* 대시보드 카드 */
     .toss-card-container { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .toss-card { flex: 1 1 200px; background-color: #ffffff; border-radius: 20px; padding: 24px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.04); text-align: center; border: 1px solid #f2f4f6; }
-    .toss-title { color: #4e5968; font-size: 15px; font-weight: 600; margin-bottom: 8px; }
-    .toss-amount { color: #191f28; font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
-    .highlight-blue { color: #3182f6; }
-    .detail-table { width: 100%; border-collapse: collapse; font-size: 14px; color: #4e5968; margin-top: 5px; }
-    .detail-table tr { border-bottom: 1px solid #f2f4f6; }
-    .detail-table td { padding: 12px 4px; }
-    input, select { font-size: 16px !important; }
+    .toss-card { 
+        flex: 1 1 200px; 
+        background-color: #ffffff !important; 
+        border-radius: 20px; 
+        padding: 24px; 
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.04) !important; 
+        text-align: center; 
+        border: 1px solid #f2f4f6 !important; 
+    }
+    .toss-title { color: #4e5968 !important; font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+    .toss-amount { color: #191f28 !important; font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+    .highlight-blue { color: #3182f6 !important; }
+
+    /* 세부 내역 테이블 */
+    .detail-table { width: 100%; border-collapse: collapse; font-size: 14px; color: #4e5968 !important; margin-top: 5px; }
+    .detail-table tr { border-bottom: 1px solid #f2f4f6 !important; }
+    .detail-table td { padding: 12px 4px; color: #191f28 !important; }
+    
+    /* 사이드바 등 기타 영역 강제 화이트 */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
