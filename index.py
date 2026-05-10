@@ -75,20 +75,38 @@ st.markdown("""
     h1, h2, h3, h4, p, span, div, label, li, .stMarkdown { color: #191f28 !important; }
     
     /* 버튼 스타일 */
-    button[kind="primary"], button[kind="primaryFormSubmit"], [data-testid="baseButton-primary"] {
-        background-color: #3182f6 !important; color: #ffffff !important; border-radius: 16px !important; border: none !important;
+    button[kind="primary"], 
+    button[kind="primaryFormSubmit"], 
+    button[kind="secondary"],
+    [data-testid="baseButton-primary"],
+    [data-testid="baseButton-secondary"],
+    [data-testid="stFormSubmitButton"] button {
+        background-color: #3182f6 !important; 
+        color: #ffffff !important; 
+        border-radius: 16px !important; 
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(49, 130, 246, 0.2) !important;
     }
-    button[kind="primary"] p, button[kind="primary"] span, [data-testid="baseButton-primary"] p { color: #ffffff !important; }
     
-    [data-testid="baseButton-secondary"] { background-color: #ffffff !important; color: #191f28 !important; border: 1px solid #e5e8eb !important; border-radius: 16px !important; }
-    [data-testid="baseButton-secondary"] p { color: #191f28 !important; }
-
-    /* 입력창 */
-    input, select, [data-testid="stSelectbox"] div { background-color: #ffffff !important; color: #191f28 !important; }
-    div[data-baseweb="popover"], div[data-baseweb="menu"] { background-color: #ffffff !important; }
+    /* 버튼 내부 텍스트 강제 화이트 */
+    button p, button span, [data-testid="baseButton-secondary"] p { 
+        color: #ffffff !important; 
+        -webkit-text-fill-color: #ffffff !important;
+    }
     
-    /* 카드 */
-    .toss-card { background-color: #ffffff !important; border-radius: 20px; padding: 20px; border: 1px solid #f2f4f6 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important; text-align: center; }
+    /* 입력창 및 카드 테두리를 연한 파란색으로 */
+    input, select, textarea, [data-testid="stSelectbox"] div, .toss-card, [data-testid="stForm"] {
+        border: 1px solid #e8f3ff !important;
+    }
+    
+    /* 카드 그림자 및 강조색 */
+    .toss-card { 
+        background-color: #ffffff !important; 
+        border-radius: 20px; 
+        padding: 20px; 
+        box-shadow: 0 8px 24px rgba(49, 130, 246, 0.05) !important; 
+        text-align: center; 
+    }
     .toss-title { color: #4e5968 !important; font-size: 14px; font-weight: 600; margin-bottom: 5px; }
     .toss-amount { color: #191f28 !important; font-size: 24px; font-weight: 800; }
     .highlight-blue { color: #3182f6 !important; }
