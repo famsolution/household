@@ -147,14 +147,22 @@ st.markdown("""
     }
 
     /* 5. 버튼 대비 (글자 흰색 고정) */
-    button[kind="primary"], button[kind="primaryFormSubmit"], [data-testid="baseButton-primary"] {
+    button[kind="primary"], 
+    button[kind="primaryFormSubmit"], 
+    [data-testid="baseButton-primary"],
+    [data-testid="stFormSubmitButton"] button {
         background-color: #3182f6 !important;
+        color: #ffffff !important;
         border: none !important;
     }
-    /* 버튼 내부의 모든 텍스트 요소를 흰색으로 */
+    
+    /* 버튼 내부의 모든 텍스트 요소를 흰색으로 강제 */
     button[kind="primary"] p, button[kind="primary"] span, 
-    [data-testid="baseButton-primary"] p, [data-testid="baseButton-primary"] span {
+    button[kind="primaryFormSubmit"] p, button[kind="primaryFormSubmit"] span,
+    [data-testid="baseButton-primary"] p, [data-testid="baseButton-primary"] span,
+    [data-testid="stFormSubmitButton"] p, [data-testid="stFormSubmitButton"] span {
         color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
     }
     
     [data-testid="baseButton-secondary"] {
@@ -205,7 +213,7 @@ st.markdown("""
 
 st.title("우리집 가계부 💳")
 
-tab_input, tab_dashboard, tab_upload = st.tabs(["✍️ 내역 입력", "📊 대시보드", "📂 파일 가져오기"])
+tab_input, tab_dashboard, tab_edit, tab_upload = st.tabs(["✍️ 내역 입력", "📊 대시보드", "✏️ 내역 수정", "📂 파일 가져오기"])
 
 # ==========================================
 # ✍️ 탭 1: 직접 입력
@@ -265,7 +273,8 @@ with tab_dashboard:
                 margin=dict(t=20, b=20, l=20, r=20), 
                 showlegend=False,
                 paper_bgcolor='#f2f4f6',
-                plot_bgcolor='#f2f4f6'
+                plot_bgcolor='#f2f4f6',
+                font=dict(color='#191f28') # 텍스트 색상을 진하게 고정
             )
             st.plotly_chart(fig_p, use_container_width=True)
         with c_right:
@@ -276,9 +285,11 @@ with tab_dashboard:
             fig_b.update_layout(
                 margin=dict(t=20, b=20, l=20, r=20), 
                 plot_bgcolor='#f2f4f6', 
-                paper_bgcolor='#f2f4f6'
+                paper_bgcolor='#f2f4f6',
+                font=dict(color='#191f28') # 텍스트 색상을 진하게 고정
             )
-            fig_b.update_yaxes(showgrid=True, gridcolor='#ffffff')
+            fig_b.update_yaxes(showgrid=True, gridcolor='#ffffff', tickfont=dict(color='#191f28'))
+            fig_b.update_xaxes(tickfont=dict(color='#191f28'))
             st.plotly_chart(fig_b, use_container_width=True)
             
         st.markdown("### 📋 항목별 상세 (눌러서 펼치기)")
@@ -302,30 +313,39 @@ with tab_dashboard:
         summary_html += '</div>'
         st.markdown(summary_html, unsafe_allow_html=True)
         
-        st.markdown("---")
-        st.subheader("⚙️ 전체 데이터 관리 (수정/삭제/추가)")
-        st.info("💡 **팁**: 표 안의 칸을 클릭해 내용을 수정하거나, 행 왼쪽을 클릭해 선택 후 Delete 키로 삭제할 수 있습니다. 가장 아래 빈 행에 내용을 적으면 항목이 추가됩니다.")
-        edited = st.data_editor(master_df, num_rows="dynamic", use_container_width=True)
-        col_btn1, col_btn2 = st.columns([1, 4])
-        with col_btn1:
-            if st.button("💾 수정 내용 저장", use_container_width=True, type="primary"):
-                save_master_data(edited)
-                st.success("업데이트되었습니다.")
-                st.rerun()
-        with col_btn2:
-            with st.expander("⚠️ 데이터 전체 초기화"):
-                st.warning("이 버튼을 누르면 마스터 가계부의 모든 데이터가 영구적으로 삭제됩니다.")
-                if st.button("🔥 모든 데이터 삭제하고 처음부터 시작하기"):
-                    empty_df = pd.DataFrame(columns=['날짜', '구분', '주체', '분류', '내역', '금액'])
-                    save_master_data(empty_df)
-                    st.success("전체 데이터가 성공적으로 초기화되었습니다.")
-                    st.rerun()
         st.divider()
         csv = master_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 통합 내역 백업(CSV) 다운로드", csv, "ledger_backup.csv", "text/csv")
+        st.download_button("📥 통합 내역 백업(CSV) 다운로드", csv, "ledger_backup.csv", "text/csv", use_container_width=True)
 
 # ==========================================
-# 📂 탭 3: 엑셀 업로드
+# ✏️ 탭 3: 내역 수정 및 삭제
+# ==========================================
+with tab_edit:
+    st.markdown("### ✏️ 전체 내역 관리")
+    st.info("💡 **수정 방법**: 표 안의 칸을 클릭해 내용을 직접 수정하세요.\n\n"
+            "💡 **삭제 방법**: 행 왼쪽 끝을 클릭하여 선택한 후, 키보드의 `Delete` 키를 누르세요.\n\n"
+            "💡 **추가 방법**: 가장 아래 빈 행에 내용을 입력하면 항목이 추가됩니다.")
+    
+    # 데이터 에디터 출력
+    edited = st.data_editor(master_df, num_rows="dynamic", use_container_width=True)
+    
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("💾 변경사항 저장하기", use_container_width=True, type="primary"):
+            save_master_data(edited)
+            st.success("✅ 모든 변경사항이 저장되었습니다.")
+            st.rerun()
+    with c2:
+        with st.expander("⚠️ 데이터 초기화"):
+            st.warning("주의: 모든 가계부 내역이 삭제됩니다.")
+            if st.button("🔥 전체 삭제하기", use_container_width=True):
+                empty_df = pd.DataFrame(columns=['날짜', '구분', '주체', '분류', '내역', '금액'])
+                save_master_data(empty_df)
+                st.success("초기화 완료")
+                st.rerun()
+
+# ==========================================
+# 📂 탭 4: 엑셀 업로드
 # ==========================================
 with tab_upload:
     st.markdown("### 📥 기존 엑셀/CSV 가져오기")
