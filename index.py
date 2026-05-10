@@ -4,7 +4,7 @@ import plotly.express as px
 import os
 from datetime import datetime
 
-# 1. 페이지 기본 설정 (가장 최상단)
+# 1. 페이지 기본 설정 (항상 최상단)
 st.set_page_config(page_title="우리집 통합 스마트 가계부", page_icon="💳", layout="wide")
 
 # ==========================================
@@ -13,361 +13,228 @@ st.set_page_config(page_title="우리집 통합 스마트 가계부", page_icon=
 if "password_correct" not in st.session_state:
     st.session_state["password_correct"] = False
 
-# 비밀번호가 맞지 않을 때만 로그인 화면을 보여줌
 if not st.session_state["password_correct"]:
-    # 중앙 정렬을 위한 컬럼 배치
     _, center_col, _ = st.columns([1, 2, 1])
-    
     with center_col:
         st.markdown("<br><br><h2 style='text-align: center; color: #191f28;'>우리집 가계부 💳</h2>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #8b95a1;'>부부 전용 공간입니다. 비밀번호를 입력해주세요.</p>", unsafe_allow_html=True)
-        
-        # 비밀번호 입력창
         pwd = st.text_input("비밀번호 입력", type="password", label_visibility="collapsed", placeholder="비밀번호를 입력하세요")
-        
         if st.button("가계부 열기", use_container_width=True, type="primary"):
-            # 💡 비밀번호를 수정했습니다.
             if pwd == "210327": 
                 st.session_state["password_correct"] = True
                 st.rerun()
             else:
                 st.error("⚠️ 비밀번호가 일치하지 않습니다.")
-                
-        # 비밀번호가 통과될 때까지 아래의 코드는 실행되지 않음
         st.stop() 
 
 # ==========================================
-# 💾 장기 저장 시스템 (Master Database)
+# 💾 데이터 처리 로직
 # ==========================================
 DATA_FILE = "my_ledger.csv"
 
 def clean_cat(name):
-    """'쿠팡-식비'를 '식비-쿠팡'으로 변경하는 등 브랜드명을 뒤로 보냅니다."""
     if not isinstance(name, str): return name
     for brand in ["쿠팡", "네이버", "쿠팡이츠"]:
-        if name.startswith(brand + "-"):
-            return name.replace(brand + "-", "") + "-" + brand
-        elif name.startswith(brand): 
+        if name.startswith(brand + "-"): return name.replace(brand + "-", "") + "-" + brand
+        elif name.startswith(brand):
             for sep in ["-", " ", "/"]:
-                if name.startswith(brand + sep):
-                    return name.replace(brand + sep, "") + "-" + brand
+                if name.startswith(brand + sep): return name.replace(brand + sep, "") + "-" + brand
     return name
 
 def load_master_data():
-    """로컬에 저장된 마스터 가계부 파일을 불러옵니다."""
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         if '날짜' in df.columns:
             df['날짜'] = pd.to_datetime(df['날짜'], errors='coerce', format='mixed')
             df['날짜'] = df['날짜'].fillna(pd.Timestamp.now())
-            df['날짜'] = df['날짜'].dt.strftime('%Y-%m-%d')
         if '주체' in df.columns:
             df['주체'] = df['주체'].replace('아내', '지은').replace('남편', '영민')
         if '분류' in df.columns:
             df['분류'] = df['분류'].apply(clean_cat)
         return df
-    else:
-        return pd.DataFrame(columns=['날짜', '구분', '주체', '분류', '내역', '금액'])
+    return pd.DataFrame(columns=['날짜', '구분', '주체', '분류', '내역', '금액'])
 
 def save_master_data(df):
-    """마스터 데이터를 파일로 영구 저장합니다."""
-    df.to_csv(DATA_FILE, index=False, encoding='utf-8-sig')
+    df_save = df.copy()
+    if '날짜' in df_save.columns and pd.api.types.is_datetime64_any_dtype(df_save['날짜']):
+        df_save['날짜'] = df_save['날짜'].dt.strftime('%Y-%m-%d')
+    df_save.to_csv(DATA_FILE, index=False, encoding='utf-8-sig')
 
 master_df = load_master_data()
-
 DEFAULT_CATS = ['식비', '육아', '외식', '생필품', '병원', '주유', '기타']
-if not master_df.empty and '분류' in master_df.columns:
-    existing_cats = master_df['분류'].dropna().unique().tolist()
-    all_categories = sorted(list(set(DEFAULT_CATS + existing_cats)))
-else:
-    all_categories = DEFAULT_CATS
+all_categories = sorted(list(set(DEFAULT_CATS + (master_df['분류'].dropna().unique().tolist() if not master_df.empty else []))))
 
 # ==========================================
-# 🎨 트렌디한 UI/CSS 전면 개편 (다크모드 강제 화이트 고정)
+# 🎨 전역 CSS (화이트 테마 고정)
 # ==========================================
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    :root { color-scheme: light !important; }
+    html, body, [data-testid="stAppViewContainer"], .stApp { background-color: #f9fafb !important; color: #191f28 !important; font-family: 'Pretendard', sans-serif !important; }
+    h1, h2, h3, h4, p, span, div, label, li, .stMarkdown { color: #191f28 !important; }
     
-    /* 1. 화이트 테마 강제 고정 및 대비 강화 */
-    :root {
-        color-scheme: light !important;
-        --primary-color: #3182f6 !important;
+    /* 버튼 스타일 */
+    button[kind="primary"], button[kind="primaryFormSubmit"], [data-testid="baseButton-primary"] {
+        background-color: #3182f6 !important; color: #ffffff !important; border-radius: 16px !important; border: none !important;
     }
-
-    /* 배경 및 기본 텍스트 */
-    html, body, [data-testid="stAppViewContainer"], .stApp {
-        background-color: #f9fafb !important;
-        color: #191f28 !important;
-    }
-    h1, h2, h3, h4, p, span, div, label, li, .stMarkdown {
-        color: #191f28 !important;
-    }
-
-    /* 2. 입력창(Selectbox, TextInput, NumberInput) 화이트 강제 */
-    /* 셀렉트박스(드롭다운) 본체 */
-    [data-testid="stSelectbox"] div[data-baseweb="select"], 
-    [data-testid="stSelectbox"] div[role="button"],
-    [data-testid="stSelectbox"] {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-    }
-    /* 셀렉트박스 내부 텍스트 */
-    [data-testid="stSelectbox"] div[data-baseweb="select"] div {
-        color: #191f28 !important;
-        background-color: transparent !important;
-    }
-
-    /* 텍스트/숫자 입력창 */
-    [data-testid="stTextInput"] input, 
-    [data-testid="stNumberInput"] input,
-    [data-testid="stTextInput"] div[data-baseweb="base-input"],
-    [data-testid="stNumberInput"] div[data-baseweb="input"] {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-    }
-
-    /* 3. 드롭다운 팝업 목록 화이트 강제 */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-        border: 1px solid #e5e8eb !important;
-    }
-    div[data-baseweb="option"], [role="option"] {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-    }
-    div[data-baseweb="option"]:hover {
-        background-color: #f2f4f6 !important;
-    }
-
-    /* 4. 라디오 버튼 및 체크박스 라벨 */
-    [data-testid="stRadio"] label, [data-testid="stCheckbox"] label {
-        color: #191f28 !important;
-    }
-
-    /* 5. 버튼 대비 (글자 흰색 고정) */
-    button[kind="primary"], 
-    button[kind="primaryFormSubmit"], 
-    [data-testid="baseButton-primary"],
-    [data-testid="stFormSubmitButton"] button {
-        background-color: #3182f6 !important;
-        color: #ffffff !important;
-        border: none !important;
-    }
+    button[kind="primary"] p, button[kind="primary"] span, [data-testid="baseButton-primary"] p { color: #ffffff !important; }
     
-    /* 버튼 내부의 모든 텍스트 요소를 흰색으로 강제 */
-    button[kind="primary"] p, button[kind="primary"] span, 
-    button[kind="primaryFormSubmit"] p, button[kind="primaryFormSubmit"] span,
-    [data-testid="baseButton-primary"] p, [data-testid="baseButton-primary"] span,
-    [data-testid="stFormSubmitButton"] p, [data-testid="stFormSubmitButton"] span {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-    }
-    
-    [data-testid="baseButton-secondary"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e5e8eb !important;
-    }
-    [data-testid="baseButton-secondary"] p, [data-testid="baseButton-secondary"] span {
-        color: #191f28 !important;
-    }
+    [data-testid="baseButton-secondary"] { background-color: #ffffff !important; color: #191f28 !important; border: 1px solid #e5e8eb !important; border-radius: 16px !important; }
+    [data-testid="baseButton-secondary"] p { color: #191f28 !important; }
 
-    /* 6. 탭(메뉴) 및 카드 */
-    .stTabs [data-baseweb="tab-list"] { background-color: #f2f4f6 !important; }
-    .stTabs [aria-selected="true"] { background-color: #ffffff !important; color: #3182f6 !important; }
+    /* 입력창 */
+    input, select, [data-testid="stSelectbox"] div { background-color: #ffffff !important; color: #191f28 !important; }
+    div[data-baseweb="popover"], div[data-baseweb="menu"] { background-color: #ffffff !important; }
     
-    [data-testid="stForm"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e5e8eb !important;
-        border-radius: 24px !important;
-    }
-    .toss-card { background-color: #ffffff !important; border: 1px solid #f2f4f6 !important; }
-
-    /* 대시보드 카드 */
-    .toss-card-container { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-    .toss-card { 
-        flex: 1 1 200px; 
-        background-color: #ffffff !important; 
-        border-radius: 20px; 
-        padding: 24px; 
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.04) !important; 
-        text-align: center; 
-        border: 1px solid #f2f4f6 !important; 
-    }
-    .toss-title { color: #4e5968 !important; font-size: 15px; font-weight: 600; margin-bottom: 8px; }
-    .toss-amount { color: #191f28 !important; font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+    /* 카드 */
+    .toss-card { background-color: #ffffff !important; border-radius: 20px; padding: 20px; border: 1px solid #f2f4f6 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important; text-align: center; }
+    .toss-title { color: #4e5968 !important; font-size: 14px; font-weight: 600; margin-bottom: 5px; }
+    .toss-amount { color: #191f28 !important; font-size: 24px; font-weight: 800; }
     .highlight-blue { color: #3182f6 !important; }
-
-    /* 세부 내역 테이블 */
-    .detail-table { width: 100%; border-collapse: collapse; font-size: 14px; color: #4e5968 !important; margin-top: 5px; }
-    .detail-table tr { border-bottom: 1px solid #f2f4f6 !important; }
-    .detail-table td { padding: 12px 4px; color: #191f28 !important; }
-    
-    /* 사이드바 등 기타 영역 강제 화이트 */
-    [data-testid="stSidebar"], [data-testid="stSidebarNav"] {
-        background-color: #ffffff !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("우리집 가계부 💳")
+# ==========================================
+# 🚀 내비게이션 시스템
+# ==========================================
+if "current_page" not in st.session_state:
+    st.session_state["current_page"] = "Home"
 
-tab_input, tab_dashboard, tab_edit, tab_upload = st.tabs(["✍️ 내역 입력", "📊 대시보드", "✏️ 내역 수정", "📂 파일 가져오기"])
+def go_to(page):
+    st.session_state["current_page"] = page
+    st.rerun()
+
+# 🏠 홈 메뉴 (2x2 카드형)
+if st.session_state["current_page"] == "Home":
+    st.title("우리집 가계부 💳")
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    c1, c2 = st.columns(2)
+    menu_data = [
+        ("Input", "✍️ 내역 입력", "오늘 쓴 돈 기록하기"),
+        ("Dashboard", "📊 대시보드", "월별 지출 분석하기"),
+        ("Edit", "✏️ 내역 수정", "기존 내역 관리하기"),
+        ("Upload", "📂 파일 가져오기", "외부 데이터 합치기")
+    ]
+    
+    for i, (page_id, title, desc) in enumerate(menu_data):
+        col = c1 if i % 2 == 0 else c2
+        with col:
+            st.markdown(f"""
+                <div style="background: white; padding: 30px 20px; border-radius: 24px; 
+                     box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin-bottom: 20px; 
+                     border: 1px solid #f2f4f6; text-align: center;">
+                    <div style="font-size: 28px; margin-bottom: 10px;">{title.split()[0]}</div>
+                    <div style="font-weight: 800; font-size: 18px; color: #191f28; margin-bottom: 5px;">{title.split()[1]}</div>
+                    <div style="font-size: 13px; color: #8b95a1;">{desc}</div>
+                </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"{title.split()[1]} 열기", key=f"btn_{page_id}", use_container_width=True, type="primary"):
+                go_to(page_id)
+    st.stop()
+
+# 모든 페이지 상단 뒤로가기
+if st.button("⬅️ 메인 메뉴로", key="back_btn"):
+    go_to("Home")
 
 # ==========================================
-# ✍️ 탭 1: 직접 입력
+# ✍️ 페이지 1: 내역 입력
 # ==========================================
-with tab_input:
-    st.markdown("<h3 style='color: #191f28; font-weight: 800;'>얼마를 쓰셨나요? 💸</h3>", unsafe_allow_html=True)
-    with st.form("quick_input", clear_on_submit=True):
-        type_v = st.radio("어떤 내역인가요?", ["지출", "수입"], horizontal=True)
-        who_v = st.radio("누가 결제했나요?", ["공동", "영민", "지은"], horizontal=True)
-        st.markdown("<hr style='border:1px dashed #e5e8eb; margin: 15px 0;'>", unsafe_allow_html=True)
+if st.session_state["current_page"] == "Input":
+    st.subheader("📝 오늘 얼마나 쓰셨나요?")
+    with st.form("input_form", clear_on_submit=True):
+        t_type = st.radio("구분", ["지출", "수입"], horizontal=True)
+        t_who = st.radio("주체", ["공동", "영민", "지은"], horizontal=True)
         c1, c2 = st.columns(2)
-        date_v = c1.date_input("날짜", datetime.today())
-        cat_v = c2.selectbox("어디에 속하나요? (분류)", all_categories)
-        amount_v = st.number_input("금액을 입력하세요 (원)", min_value=0, step=1000, format="%d")
-        desc_v = st.text_input("상세 내역 (어디서 썼나요?)", placeholder="예: 정석소아과 진료비")
-        
-        if st.form_submit_button("장부에 기록하기", use_container_width=True):
-            if amount_v > 0:
-                new_entry = pd.DataFrame([{
-                    '날짜': date_v.strftime("%Y-%m-%d"),
-                    '구분': type_v, '주체': who_v, '분류': cat_v, '내역': desc_v, '금액': amount_v
-                }])
-                master_df = pd.concat([master_df, new_entry], ignore_index=True)
+        t_date = c1.date_input("날짜", datetime.today())
+        t_cat = c2.selectbox("항목", all_categories)
+        t_amt = st.number_input("금액 (원)", min_value=0, step=1000)
+        t_desc = st.text_input("상세 내역", placeholder="어디에 사용하셨나요?")
+        if st.form_submit_button("기록 완료", use_container_width=True):
+            if t_amt > 0:
+                new_row = pd.DataFrame([{'날짜': pd.to_datetime(t_date), '구분': t_type, '주체': t_who, '분류': t_cat, '내역': t_desc, '금액': t_amt}])
+                master_df = pd.concat([master_df, new_row], ignore_index=True)
                 save_master_data(master_df)
-                st.success("✅ 성공적으로 기록되었습니다!")
+                st.success("기록되었습니다!")
                 st.rerun()
-            else:
-                st.error("⚠️ 금액을 0원 이상으로 입력해주세요.")
 
 # ==========================================
-# 📈 탭 2: 대시보드 및 관리
+# 📊 페이지 2: 대시보드 (월별 필터 포함)
 # ==========================================
-with tab_dashboard:
+elif st.session_state["current_page"] == "Dashboard":
     if master_df.empty:
-        st.info("아직 기록된 내역이 없습니다. 첫 지출을 입력해보세요!")
+        st.info("데이터가 없습니다.")
     else:
-        df_exp = master_df[master_df['구분'] == '지출'].copy()
-        df_exp['금액'] = pd.to_numeric(df_exp['금액'], errors='coerce').fillna(0)
+        # 월별 필터
+        master_df['날짜'] = pd.to_datetime(master_df['날짜'])
+        months = sorted(master_df['날짜'].dt.strftime('%Y-%m').unique().tolist(), reverse=True)
+        sel_month = st.selectbox("📅 조회할 월을 선택하세요", months)
+        
+        df_month = master_df[master_df['날짜'].dt.strftime('%Y-%m') == sel_month].copy()
+        df_exp = df_month[df_month['구분'] == '지출'].copy()
+        
         total = df_exp['금액'].sum()
         h_sum = df_exp[df_exp['주체'] == '영민']['금액'].sum()
         w_sum = df_exp[df_exp['주체'] == '지은']['금액'].sum()
         
-        kpi_html = f"""
-        <div class="toss-card-container">
-            <div class="toss-card"><div class="toss-title">이번 달 총 지출</div><div class="toss-amount highlight-blue">{int(total):,}원</div></div>
-            <div class="toss-card"><div class="toss-title">영민 지출</div><div class="toss-amount">{int(h_sum):,}원</div></div>
-            <div class="toss-card"><div class="toss-title">지은 지출</div><div class="toss-amount">{int(w_sum):,}원</div></div>
+        # 상단 카드
+        st.markdown(f"""
+        <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div class="toss-card" style="flex: 1.5; min-width: 200px;">
+                <div class="toss-title">{sel_month} 총 지출</div>
+                <div class="toss-amount highlight-blue">{int(total):,}원</div>
+            </div>
+            <div class="toss-card" style="flex: 1;">
+                <div class="toss-title">영민</div><div class="toss-amount">{int(h_sum):,}원</div>
+            </div>
+            <div class="toss-card" style="flex: 1;">
+                <div class="toss-title">지은</div><div class="toss-amount">{int(w_sum):,}원</div>
+            </div>
         </div>
-        """
-        st.markdown(kpi_html, unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-        c_left, c_right = st.columns(2)
-        with c_left:
-            st.markdown("<h4 style='color: #333d4b;'>항목별 비중</h4>", unsafe_allow_html=True)
-            fig_p = px.pie(df_exp, values='금액', names='분류', hole=0.45, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_p.update_layout(
-                margin=dict(t=20, b=20, l=20, r=20), 
-                showlegend=False,
-                paper_bgcolor='#f2f4f6',
-                plot_bgcolor='#f2f4f6',
-                font=dict(color='#191f28') # 텍스트 색상을 진하게 고정
-            )
+        """, unsafe_allow_html=True)
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            fig_p = px.pie(df_exp, values='금액', names='분류', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig_p.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#f2f4f6', font=dict(color='#191f28'))
             st.plotly_chart(fig_p, use_container_width=True)
-        with c_right:
-            st.markdown("<h4 style='color: #333d4b;'>일자별 흐름</h4>", unsafe_allow_html=True)
-            daily = df_exp.groupby('날짜')['금액'].sum().reset_index()
+        with c2:
+            daily = df_exp.groupby(df_exp['날짜'].dt.strftime('%d'))['금액'].sum().reset_index()
             fig_b = px.bar(daily, x='날짜', y='금액')
-            fig_b.update_traces(marker_color='#3182f6', marker_line_width=0, opacity=0.9)
-            fig_b.update_layout(
-                margin=dict(t=20, b=20, l=20, r=20), 
-                plot_bgcolor='#f2f4f6', 
-                paper_bgcolor='#f2f4f6',
-                font=dict(color='#191f28') # 텍스트 색상을 진하게 고정
-            )
-            fig_b.update_yaxes(showgrid=True, gridcolor='#ffffff', tickfont=dict(color='#191f28'))
-            fig_b.update_xaxes(tickfont=dict(color='#191f28'))
+            fig_b.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#f2f4f6', font=dict(color='#191f28'))
             st.plotly_chart(fig_b, use_container_width=True)
-            
-        st.markdown("### 📋 항목별 상세 (눌러서 펼치기)")
-        sort_opt = st.selectbox("정렬 기준", ["금액 높은 순 ↓", "금액 낮은 순 ↑", "항목 이름순 (가나다)"], label_visibility="collapsed")
-        cat_sum = df_exp.groupby('분류')['금액'].sum().reset_index()
-        if sort_opt == "금액 높은 순 ↓": cat_sum = cat_sum.sort_values('금액', ascending=False)
-        elif sort_opt == "금액 낮은 순 ↑": cat_sum = cat_sum.sort_values('금액', ascending=True)
-        else: cat_sum = cat_sum.sort_values('분류', ascending=True)
-        
-        summary_html = '<div style="background-color: #ffffff; border-radius: 20px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">'
+
+        st.markdown("### 📋 상세 내역")
+        cat_sum = df_exp.groupby('분류')['금액'].sum().reset_index().sort_values('금액', ascending=False)
         for _, row in cat_sum.iterrows():
-            cat = row['분류']
-            amt = int(row['금액'])
-            perc = (amt / total * 100) if total > 0 else 0
-            details = df_exp[df_exp['분류'] == cat].sort_values('날짜', ascending=False)
-            det_html = '<div style="margin-top:12px; padding:12px; background:#f9fafb; border-radius:12px;"><table class="detail-table">'
-            for _, d in details.iterrows():
-                det_html += f'<tr><td style="color:#8b95a1;">{d["날짜"][5:]}</td><td style="font-weight:500;">{d["내역"]}</td><td style="text-align:right; font-weight:600; color:#191f28;">{int(d["금액"]):,}원</td></tr>'
-            det_html += '</table></div>'
-            summary_html += f'<details style="padding:18px 10px; border-bottom:1px solid #f2f4f6; cursor:pointer;"><summary style="list-style:none; outline:none;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><span style="font-weight:700; color:#333d4b; font-size:17px;">{cat} <span style="font-size:12px; color:#b0b8c1;">▼</span></span><span style="font-weight:800; color:#191f28; font-size:18px;">{amt:,}원</span></div><div style="background:#f2f4f6; border-radius:8px; height:10px; width:100%; overflow:hidden;"><div style="background:#3182f6; width:{perc}%; height:100%; border-radius:8px;"></div></div><div style="text-align:right; font-size:13px; color:#8b95a1; margin-top:6px;">비중 {perc:.1f}%</div></summary>{det_html}</details>'
-        summary_html += '</div>'
-        st.markdown(summary_html, unsafe_allow_html=True)
-        
-        st.divider()
-        csv = master_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 통합 내역 백업(CSV) 다운로드", csv, "ledger_backup.csv", "text/csv", use_container_width=True)
+            with st.expander(f"{row['분류']} - {int(row['금액']):,}원"):
+                details = df_exp[df_exp['분류'] == row['분류']].sort_values('날짜', ascending=False)
+                st.table(details[['날짜', '내역', '금액']].assign(날짜=lambda x: x['날짜'].dt.strftime('%m-%d')))
 
 # ==========================================
-# ✏️ 탭 3: 내역 수정 및 삭제
+# ✏️ 페이지 3: 내역 수정
 # ==========================================
-with tab_edit:
-    st.markdown("### ✏️ 전체 내역 관리")
-    st.info("💡 **수정 방법**: 표 안의 칸을 클릭해 내용을 직접 수정하세요.\n\n"
-            "💡 **삭제 방법**: 행 왼쪽 끝을 클릭하여 선택한 후, 키보드의 `Delete` 키를 누르세요.\n\n"
-            "💡 **추가 방법**: 가장 아래 빈 행에 내용을 입력하면 항목이 추가됩니다.")
-    
-    # 데이터 에디터 출력
-    edited = st.data_editor(master_df, num_rows="dynamic", use_container_width=True)
-    
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        if st.button("💾 변경사항 저장하기", use_container_width=True, type="primary"):
-            save_master_data(edited)
-            st.success("✅ 모든 변경사항이 저장되었습니다.")
-            st.rerun()
-    with c2:
-        with st.expander("⚠️ 데이터 초기화"):
-            st.warning("주의: 모든 가계부 내역이 삭제됩니다.")
-            if st.button("🔥 전체 삭제하기", use_container_width=True):
-                empty_df = pd.DataFrame(columns=['날짜', '구분', '주체', '분류', '내역', '금액'])
-                save_master_data(empty_df)
-                st.success("초기화 완료")
-                st.rerun()
+elif st.session_state["current_page"] == "Edit":
+    st.subheader("✏️ 내역 수정 및 삭제")
+    edited_df = st.data_editor(master_df, num_rows="dynamic", use_container_width=True)
+    if st.button("💾 변경사항 저장", use_container_width=True, type="primary"):
+        save_master_data(edited_df)
+        st.success("저장 완료!")
+        st.rerun()
 
 # ==========================================
-# 📂 탭 4: 엑셀 업로드
+# 📂 페이지 4: 파일 업로드
 # ==========================================
-with tab_upload:
-    st.markdown("### 📥 기존 엑셀/CSV 가져오기")
-    st.info("과거 데이터를 업로드하면 기존 장부에 병합됩니다.")
-    uploaded_file = st.file_uploader("파일 선택", type=['xlsx', 'csv'])
-    if uploaded_file:
-        if uploaded_file.name.endswith('.csv'): up_df = pd.read_csv(uploaded_file)
-        else: up_df = pd.read_excel(uploaded_file)
-        col_map = {'항목': '분류', '카테고리': '분류', '구분': '구분', '내용': '내역', '상세': '내역', '지출액': '금액'}
+elif st.session_state["current_page"] == "Upload":
+    st.subheader("📂 엑셀/CSV 파일 가져오기")
+    up_file = st.file_uploader("파일 선택", type=['xlsx', 'csv'])
+    if up_file:
+        up_df = pd.read_csv(up_file) if up_file.name.endswith('.csv') else pd.read_excel(up_file)
+        # 컬럼 매핑
+        col_map = {'항목': '분류', '카테고리': '분류', '구분': '구분', '내용': '내역', '지출액': '금액'}
         up_df = up_df.rename(columns=col_map)
-        for col in ['날짜', '구분', '주체', '분류', '내역', '금액']:
-            if col not in up_df.columns:
-                if col == '구분': up_df[col] = "지출"
-                elif col == '금액': up_df[col] = 0
-                else: up_df[col] = "기타" if col == '분류' else "-"
-        up_df['구분'] = up_df['구분'].fillna("지출").replace("", "지출").replace("-", "지출")
-        up_df['분류'] = up_df['분류'].astype(str).str.strip().apply(clean_cat)
-        up_df['날짜'] = pd.to_datetime(up_df['날짜'], errors='coerce', format='mixed').dt.strftime('%Y-%m-%d')
-        up_df['날짜'] = up_df['날짜'].fillna(datetime.today().strftime('%Y-%m-%d'))
-        up_df['금액'] = pd.to_numeric(up_df['금액'].astype(str).replace({',': ''}, regex=True), errors='coerce').fillna(0)
-        st.dataframe(up_df.head(5), use_container_width=True)
-        if st.button("내 장부에 합치기", type="primary", use_container_width=True):
+        if st.button("장부에 합치기", use_container_width=True, type="primary"):
             master_df = pd.concat([master_df, up_df], ignore_index=True).drop_duplicates()
             save_master_data(master_df)
             st.success("통합 완료!")
