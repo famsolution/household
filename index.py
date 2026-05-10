@@ -140,11 +140,15 @@ st.markdown("""
     }
 
     /* 드롭다운 메뉴 대비 */
-    div[data-baseweb="popover"], div[data-baseweb="menu"] {
+    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
         background-color: #ffffff !important;
     }
-    div[data-baseweb="option"] {
+    div[data-baseweb="option"], [role="option"] {
         color: #191f28 !important;
+        background-color: #ffffff !important;
+    }
+    div[data-baseweb="option"]:hover {
+        background-color: #f2f4f6 !important;
     }
 
     /* 차트 및 기타 요소 */
