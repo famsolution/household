@@ -89,109 +89,70 @@ st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     
-    /* 1. 다크모드 무시하고 화이트 테마 강제 고정 */
+    /* 1. 화이트 테마 고정 및 가독성 확보 */
     :root {
-        --primary-color: #3182f6 !important;
-        --background-color: #f9fafb !important;
-        --secondary-background-color: #ffffff !important;
-        --text-color: #191f28 !important;
+        color-scheme: light;
+        --primary-color: #3182f6;
     }
 
-    /* 모든 텍스트와 배경을 화이트 모드로 고정 */
-    html, body, [data-testid="stAppViewContainer"], .stApp, [data-testid="stHeader"] {
+    html, body, [data-testid="stAppViewContainer"], .stApp {
         background-color: #f9fafb !important;
         color: #191f28 !important;
-        font-family: 'Pretendard', sans-serif !important;
     }
 
-    /* 다크모드 브라우저 대응: 모든 요소 색상 강제 */
-    h1, h2, h3, h4, p, span, div, label, li, table, td, th, .stMarkdown, [data-testid="stExpander"] {
+    /* 모든 기본 텍스트를 검정색 계열로 고정 */
+    h1, h2, h3, h4, p, span, div, label, li, .stMarkdown {
         color: #191f28 !important;
     }
 
-    /* 데이터 에디터(수정 표) 강제 화이트 */
-    [data-testid="stDataEditor"], .glide-data-grid {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-    }
-
-    /* 모달 및 팝업창 강제 화이트 */
-    [data-testid="stDialog"], [role="dialog"], .stDialog {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-    }
-
-    /* 입력창 및 위젯 배경 화이트 고정 */
-    input, select, textarea, [data-testid="stNumberInput"] input, [data-testid="stTextInput"] input, [data-testid="stSelectbox"] {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-        border-color: #e5e8eb !important;
-    }
-
-    /* 드롭다운 메뉴(Selectbox) 팝업 배경 화이트 고정 */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], div[role="listbox"], [data-baseweb="select"] {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-    }
-    
-    /* 드롭다운 개별 항목 스타일 */
-    div[data-baseweb="option"], [role="option"] {
-        background-color: #ffffff !important;
-        color: #191f28 !important;
-    }
-    div[data-baseweb="option"]:hover {
-        background-color: #f2f4f6 !important;
-    }
-
-    /* 탭(Tab) 디자인 */
+    /* 2. 메뉴(Tabs) 대비 강화 */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
         background-color: #f2f4f6 !important;
-        padding: 6px;
-        border-radius: 16px;
-        border: none;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: transparent !important;
-        border-radius: 12px;
-        height: 48px;
-        padding: 0 24px;
-        font-weight: 700;
-        color: #8b95a1 !important;
-        border: none;
+        color: #8b95a1 !important; /* 비활성 탭: 회색 */
     }
     .stTabs [aria-selected="true"] {
         background-color: #ffffff !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+        color: #3182f6 !important; /* 활성 탭: 파란색 (대비 강조) */
+    }
+
+    /* 3. 버튼 대비 수정 (배경색이 있을 때만 화이트 텍스트) */
+    button[kind="primary"], button[kind="primaryFormSubmit"], [data-testid="baseButton-primary"] {
+        background-color: #3182f6 !important;
+        color: #ffffff !important; /* 파란 배경엔 흰색 글자 */
+    }
+    
+    /* 일반 버튼 (배경이 흰색에 가까운 경우) */
+    [data-testid="baseButton-secondary"] {
+        background-color: #ffffff !important;
+        color: #191f28 !important; /* 흰 배경엔 검정 글자 */
+        border: 1px solid #e5e8eb !important;
+    }
+    /* 버튼 내부 텍스트 강제 적용 */
+    button[kind="primary"] p, button[kind="primary"] span { color: #ffffff !important; }
+    [data-testid="baseButton-secondary"] p, [data-testid="baseButton-secondary"] span { color: #191f28 !important; }
+
+    /* 4. 첫 화면(로그인) 및 카드 대비 */
+    [data-testid="stForm"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e5e8eb !important;
+    }
+
+    /* 드롭다운 메뉴 대비 */
+    div[data-baseweb="popover"], div[data-baseweb="menu"] {
+        background-color: #ffffff !important;
+    }
+    div[data-baseweb="option"] {
         color: #191f28 !important;
     }
 
-    /* 폼(Form) 카드 디자인 */
-    [data-testid="stForm"] {
+    /* 차트 및 기타 요소 */
+    .toss-card {
         background-color: #ffffff !important;
-        padding: 30px;
-        border-radius: 24px;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.03) !important;
-        border: 1px solid #ffffff !important;
     }
-
-    /* 메인 및 모든 버튼 텍스트 화이트 고정 */
-    button, button p, button span {
-        color: #ffffff !important;
-    }
-    
-    button[kind="primaryFormSubmit"], button[kind="primary"], [data-testid="baseButton-primary"] {
-        background-color: #3182f6 !important;
-        color: #ffffff !important;
-        border-radius: 16px !important;
-    }
-    
-    /* 일반 버튼도 배경색이 있는 경우를 대비해 텍스트 화이트 고정 */
-    [data-testid="baseButton-secondary"] {
-        color: #ffffff !important;
-        background-color: #3182f6 !important;
-        border-radius: 16px !important;
-        border: none !important;
+    .toss-amount {
+        color: #191f28 !important;
     }
 
     /* 대시보드 카드 */
