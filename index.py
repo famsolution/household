@@ -91,39 +91,51 @@ st.markdown("""
     
     /* 1. 다크모드 무시하고 화이트 테마 강제 고정 */
     :root {
-        --primary-color: #3182f6;
-        --background-color: #f9fafb;
-        --secondary-background-color: #ffffff;
-        --text-color: #191f28;
+        --primary-color: #3182f6 !important;
+        --background-color: #f9fafb !important;
+        --secondary-background-color: #ffffff !important;
+        --text-color: #191f28 !important;
     }
 
     /* 모든 텍스트와 배경을 화이트 모드로 고정 */
-    html, body, [data-testid="stAppViewContainer"], .stApp {
+    html, body, [data-testid="stAppViewContainer"], .stApp, [data-testid="stHeader"] {
         background-color: #f9fafb !important;
         color: #191f28 !important;
         font-family: 'Pretendard', sans-serif !important;
     }
 
-    /* 다크모드 브라우저 대응: 모든 텍스트 색상 강제 */
-    h1, h2, h3, h4, p, span, div, label, .stMarkdown {
+    /* 다크모드 브라우저 대응: 모든 요소 색상 강제 */
+    h1, h2, h3, h4, p, span, div, label, li, table, td, th, .stMarkdown, [data-testid="stExpander"] {
+        color: #191f28 !important;
+    }
+
+    /* 데이터 에디터(수정 표) 강제 화이트 */
+    [data-testid="stDataEditor"], .glide-data-grid {
+        background-color: #ffffff !important;
+        color: #191f28 !important;
+    }
+
+    /* 모달 및 팝업창 강제 화이트 */
+    [data-testid="stDialog"], [role="dialog"], .stDialog {
+        background-color: #ffffff !important;
         color: #191f28 !important;
     }
 
     /* 입력창 및 위젯 배경 화이트 고정 */
-    input, select, textarea, [data-testid="stNumberInput"], [data-testid="stTextInput"], [data-testid="stSelectbox"] {
+    input, select, textarea, [data-testid="stNumberInput"] input, [data-testid="stTextInput"] input, [data-testid="stSelectbox"] {
         background-color: #ffffff !important;
         color: #191f28 !important;
         border-color: #e5e8eb !important;
     }
 
     /* 드롭다운 메뉴(Selectbox) 팝업 배경 화이트 고정 */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], div[role="listbox"] {
+    div[data-baseweb="popover"], div[data-baseweb="menu"], div[role="listbox"], [data-baseweb="select"] {
         background-color: #ffffff !important;
         color: #191f28 !important;
     }
     
     /* 드롭다운 개별 항목 스타일 */
-    div[data-baseweb="option"] {
+    div[data-baseweb="option"], [role="option"] {
         background-color: #ffffff !important;
         color: #191f28 !important;
     }
@@ -177,7 +189,7 @@ st.markdown("""
     /* 일반 버튼도 배경색이 있는 경우를 대비해 텍스트 화이트 고정 */
     [data-testid="baseButton-secondary"] {
         color: #ffffff !important;
-        background-color: #3182f6 !important; /* 일반 버튼도 파란색으로 통일하여 가독성 확보 */
+        background-color: #3182f6 !important;
         border-radius: 16px !important;
         border: none !important;
     }
@@ -203,7 +215,7 @@ st.markdown("""
     .detail-table td { padding: 12px 4px; color: #191f28 !important; }
     
     /* 사이드바 등 기타 영역 강제 화이트 */
-    [data-testid="stSidebar"] {
+    [data-testid="stSidebar"], [data-testid="stSidebarNav"] {
         background-color: #ffffff !important;
     }
     </style>
