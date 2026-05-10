@@ -89,86 +89,92 @@ st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     
-    /* 1. 화이트 테마 고정 및 가독성 확보 */
+    /* 1. 화이트 테마 강제 고정 및 대비 강화 */
     :root {
-        color-scheme: light;
-        --primary-color: #3182f6;
+        color-scheme: light !important;
+        --primary-color: #3182f6 !important;
     }
 
+    /* 배경 및 기본 텍스트 */
     html, body, [data-testid="stAppViewContainer"], .stApp {
         background-color: #f9fafb !important;
         color: #191f28 !important;
     }
-
-    /* 모든 기본 텍스트를 검정색 계열로 고정 */
     h1, h2, h3, h4, p, span, div, label, li, .stMarkdown {
         color: #191f28 !important;
     }
 
-    /* 2. 메뉴(Tabs) 대비 강화 */
-    .stTabs [data-baseweb="tab-list"] {
-        background-color: #f2f4f6 !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-        color: #8b95a1 !important; /* 비활성 탭: 회색 */
-    }
-    .stTabs [aria-selected="true"] {
+    /* 2. 입력창(Selectbox, TextInput, NumberInput) 화이트 강제 */
+    /* 셀렉트박스(드롭다운) 본체 */
+    [data-testid="stSelectbox"] div[data-baseweb="select"], 
+    [data-testid="stSelectbox"] div[role="button"],
+    [data-testid="stSelectbox"] {
         background-color: #ffffff !important;
-        color: #3182f6 !important; /* 활성 탭: 파란색 (대비 강조) */
+        color: #191f28 !important;
+    }
+    /* 셀렉트박스 내부 텍스트 */
+    [data-testid="stSelectbox"] div[data-baseweb="select"] div {
+        color: #191f28 !important;
+        background-color: transparent !important;
     }
 
-    /* 3. 버튼 대비 수정 (배경색이 있을 때만 화이트 텍스트) */
-    button[kind="primary"], button[kind="primaryFormSubmit"], [data-testid="baseButton-primary"] {
-        background-color: #3182f6 !important;
-        color: #ffffff !important; /* 파란 배경엔 흰색 글자 */
-    }
-    
-    /* 일반 버튼 (배경이 흰색에 가까운 경우) */
-    [data-testid="baseButton-secondary"] {
+    /* 텍스트/숫자 입력창 */
+    [data-testid="stTextInput"] input, 
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextInput"] div[data-baseweb="base-input"],
+    [data-testid="stNumberInput"] div[data-baseweb="input"] {
         background-color: #ffffff !important;
-        color: #191f28 !important; /* 흰 배경엔 검정 글자 */
-        border: 1px solid #e5e8eb !important;
-    }
-    /* 버튼 내부 텍스트 강제 적용 */
-    button[kind="primary"] p, button[kind="primary"] span { color: #ffffff !important; }
-    [data-testid="baseButton-secondary"] p, [data-testid="baseButton-secondary"] span { color: #191f28 !important; }
-
-    /* 4. 첫 화면(로그인) 및 카드 대비 */
-    [data-testid="stForm"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e5e8eb !important;
+        color: #191f28 !important;
     }
 
-    /* 드롭다운 메뉴 대비 */
+    /* 3. 드롭다운 팝업 목록 화이트 강제 */
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
         background-color: #ffffff !important;
+        color: #191f28 !important;
+        border: 1px solid #e5e8eb !important;
     }
     div[data-baseweb="option"], [role="option"] {
-        color: #191f28 !important;
         background-color: #ffffff !important;
+        color: #191f28 !important;
     }
     div[data-baseweb="option"]:hover {
         background-color: #f2f4f6 !important;
     }
 
-    /* 텍스트 입력창 및 숫자 입력창 대비 강화 */
-    input, textarea, [data-testid="stTextInput"] div, [data-testid="stNumberInput"] div {
-        background-color: #ffffff !important;
+    /* 4. 라디오 버튼 및 체크박스 라벨 */
+    [data-testid="stRadio"] label, [data-testid="stCheckbox"] label {
         color: #191f28 !important;
-    }
-    /* 입력창 내부 실제 텍스트 강제 */
-    input {
-        color: #191f28 !important;
-        -webkit-text-fill-color: #191f28 !important; /* iOS/Safari 대응 */
     }
 
-    /* 차트 및 기타 요소 */
-    .toss-card {
-        background-color: #ffffff !important;
+    /* 5. 버튼 대비 (글자 흰색 고정) */
+    button[kind="primary"], button[kind="primaryFormSubmit"], [data-testid="baseButton-primary"] {
+        background-color: #3182f6 !important;
+        border: none !important;
     }
-    .toss-amount {
+    /* 버튼 내부의 모든 텍스트 요소를 흰색으로 */
+    button[kind="primary"] p, button[kind="primary"] span, 
+    [data-testid="baseButton-primary"] p, [data-testid="baseButton-primary"] span {
+        color: #ffffff !important;
+    }
+    
+    [data-testid="baseButton-secondary"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e5e8eb !important;
+    }
+    [data-testid="baseButton-secondary"] p, [data-testid="baseButton-secondary"] span {
         color: #191f28 !important;
     }
+
+    /* 6. 탭(메뉴) 및 카드 */
+    .stTabs [data-baseweb="tab-list"] { background-color: #f2f4f6 !important; }
+    .stTabs [aria-selected="true"] { background-color: #ffffff !important; color: #3182f6 !important; }
+    
+    [data-testid="stForm"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e5e8eb !important;
+        border-radius: 24px !important;
+    }
+    .toss-card { background-color: #ffffff !important; border: 1px solid #f2f4f6 !important; }
 
     /* 대시보드 카드 */
     .toss-card-container { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
