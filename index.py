@@ -208,51 +208,85 @@ elif st.session_state["current_page"] == "Dashboard":
     if master_df.empty:
         st.info("데이터가 없습니다.")
     else:
-        # 월별 필터
+        # 월별 필터 및 주체 필터
         master_df['날짜'] = pd.to_datetime(master_df['날짜'])
         months = sorted(master_df['날짜'].dt.strftime('%Y-%m').unique().tolist(), reverse=True)
-        sel_month = st.selectbox("📅 조회할 월을 선택하세요", months)
+        
+        c1, c2 = st.columns(2)
+        sel_month = c1.selectbox("📅 조회할 월", months)
+        sel_who = c2.selectbox("👤 누구의 내역을 볼까요?", ["전체보기"] + all_subjects)
         
         df_month = master_df[master_df['날짜'].dt.strftime('%Y-%m') == sel_month].copy()
+        if sel_who != "전체보기":
+            df_month = df_month[df_month['주체'] == sel_who]
+            
         df_exp = df_month[df_month['구분'] == '지출'].copy()
+        df_inc = df_month[df_month['구분'] == '수입'].copy()
         
-        total = df_exp['금액'].sum()
+        total_exp = df_exp['금액'].sum()
+        total_inc = df_inc['금액'].sum()
         h_sum = df_exp[df_exp['주체'] == '영민']['금액'].sum()
         w_sum = df_exp[df_exp['주체'] == '지은']['금액'].sum()
         
-        # 상단 카드
+        # 상단 카드 (수입 추가)
         st.markdown(f"""
-        <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
-            <div class="toss-card" style="flex: 1.5; min-width: 200px;">
+        <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div class="toss-card" style="flex: 1; min-width: 160px; border-top: 4px solid #3182f6;">
                 <div class="toss-title">{sel_month} 총 지출</div>
-                <div class="toss-amount highlight-blue">{int(total):,}원</div>
+                <div class="toss-amount highlight-blue">{int(total_exp):,}원</div>
             </div>
-            <div class="toss-card" style="flex: 1;">
-                <div class="toss-title">영민</div><div class="toss-amount">{int(h_sum):,}원</div>
+            <div class="toss-card" style="flex: 1; min-width: 160px; border-top: 4px solid #00d3ab;">
+                <div class="toss-title">{sel_month} 총 수입</div>
+                <div class="toss-amount" style="color: #00d3ab;">{int(total_inc):,}원</div>
             </div>
-            <div class="toss-card" style="flex: 1;">
-                <div class="toss-title">지은</div><div class="toss-amount">{int(w_sum):,}원</div>
+            <div class="toss-card" style="flex: 1; min-width: 140px;">
+                <div class="toss-title">영민 지출</div><div class="toss-amount">{int(h_sum):,}원</div>
+            </div>
+            <div class="toss-card" style="flex: 1; min-width: 140px;">
+                <div class="toss-title">지은 지출</div><div class="toss-amount">{int(w_sum):,}원</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        c1, c2 = st.columns(2)
-        with c1:
-            fig_p = px.pie(df_exp, values='금액', names='분류', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_p.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#f2f4f6', font=dict(color='#191f28'))
-            st.plotly_chart(fig_p, use_container_width=True)
-        with c2:
-            daily = df_exp.groupby(df_exp['날짜'].dt.strftime('%d'))['금액'].sum().reset_index()
-            fig_b = px.bar(daily, x='날짜', y='금액')
-            fig_b.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#f2f4f6', font=dict(color='#191f28'))
-            st.plotly_chart(fig_b, use_container_width=True)
+        # 차트 영역 (지출/수입 탭 분리)
+        chart_tab1, chart_tab2 = st.tabs(["💸 지출 분석", "💰 수입 분석"])
+        
+        with chart_tab1:
+            if df_exp.empty: st.info("해당 월의 지출 내역이 없습니다.")
+            else:
+                c1, c2 = st.columns(2)
+                with c1:
+                    fig_p = px.pie(df_exp, values='금액', names='분류', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                    fig_p.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#ffffff', font=dict(color='#191f28'))
+                    st.plotly_chart(fig_p, use_container_width=True)
+                with c2:
+                    daily = df_exp.groupby(df_exp['날짜'].dt.strftime('%d'))['금액'].sum().reset_index()
+                    fig_b = px.bar(daily, x='날짜', y='금액')
+                    fig_b.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#ffffff', font=dict(color='#191f28'))
+                    st.plotly_chart(fig_b, use_container_width=True)
 
-        st.markdown("### 📋 상세 내역")
-        cat_sum = df_exp.groupby('분류')['금액'].sum().reset_index().sort_values('금액', ascending=False)
+        with chart_tab2:
+            if df_inc.empty: st.info("해당 월의 수입 내역이 없습니다.")
+            else:
+                c1, c2 = st.columns(2)
+                with c1:
+                    fig_pi = px.pie(df_inc, values='금액', names='분류', hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
+                    fig_pi.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#ffffff', font=dict(color='#191f28'))
+                    st.plotly_chart(fig_pi, use_container_width=True)
+                with c2:
+                    daily_i = df_inc.groupby(df_inc['날짜'].dt.strftime('%d'))['금액'].sum().reset_index()
+                    fig_bi = px.bar(daily_i, x='날짜', y='금액', color_discrete_sequence=['#00d3ab'])
+                    fig_bi.update_layout(margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='#ffffff', font=dict(color='#191f28'))
+                    st.plotly_chart(fig_bi, use_container_width=True)
+
+        st.markdown(f"### 📋 {sel_month} 상세 내역")
+        # 지출/수입 통합 상세 내역
+        cat_sum = df_month.groupby(['구분', '분류'])['금액'].sum().reset_index().sort_values('금액', ascending=False)
         for _, row in cat_sum.iterrows():
-            with st.expander(f"{row['분류']} - {int(row['금액']):,}원"):
-                details = df_exp[df_exp['분류'] == row['분류']].sort_values('날짜', ascending=False)
-                st.table(details[['날짜', '내역', '금액']].assign(날짜=lambda x: x['날짜'].dt.strftime('%m-%d')))
+            badge_color = "#3182f6" if row['구분'] == '지출' else "#00d3ab"
+            with st.expander(f"[{row['구분']}] {row['분류']} - {int(row['금액']):,}원"):
+                details = df_month[(df_month['구분'] == row['구분']) & (df_month['분류'] == row['분류'])].sort_values('날짜', ascending=False)
+                st.table(details[['날짜', '주체', '내역', '금액']].assign(날짜=lambda x: x['날짜'].dt.strftime('%m-%d')))
 
 # ==========================================
 # ✏️ 페이지 3: 내역 수정
