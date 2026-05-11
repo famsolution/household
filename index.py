@@ -61,8 +61,22 @@ def save_master_data(df):
     df_save.to_csv(DATA_FILE, index=False, encoding='utf-8-sig')
 
 master_df = load_master_data()
+
+# 분류(항목) 동적 추출
 DEFAULT_CATS = ['식비', '육아', '외식', '생필품', '병원', '주유', '기타']
-all_categories = sorted(list(set(DEFAULT_CATS + (master_df['분류'].dropna().unique().tolist() if not master_df.empty else []))))
+if not master_df.empty and '분류' in master_df.columns:
+    existing_cats = [c for c in master_df['분류'].dropna().unique().tolist() if c.strip()]
+    all_categories = sorted(list(set(DEFAULT_CATS + existing_cats)))
+else:
+    all_categories = DEFAULT_CATS
+
+# 주체(누가) 동적 추출
+DEFAULT_WHO = ['공동', '영민', '지은']
+if not master_df.empty and '주체' in master_df.columns:
+    existing_who = [w for w in master_df['주체'].dropna().unique().tolist() if w.strip()]
+    all_subjects = sorted(list(set(DEFAULT_WHO + existing_who)))
+else:
+    all_subjects = DEFAULT_WHO
 
 # ==========================================
 # 🎨 전역 CSS (화이트 테마 고정)
@@ -71,7 +85,7 @@ st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     :root { color-scheme: light !important; }
-    html, body, [data-testid="stAppViewContainer"], .stApp { background-color: #f9fafb !important; color: #191f28 !important; font-family: 'Pretendard', sans-serif !important; }
+    html, body, [data-testid="stAppViewContainer"], .stApp, [data-testid="stHeader"] { background-color: #ffffff !important; color: #191f28 !important; font-family: 'Pretendard', sans-serif !important; }
     h1, h2, h3, h4, p, span, div, label, li, .stMarkdown { color: #191f28 !important; }
     
     /* 버튼 스타일 */
@@ -94,8 +108,18 @@ st.markdown("""
         -webkit-text-fill-color: #ffffff !important;
     }
     
-    /* 입력창 및 카드 테두리를 연한 파란색으로 */
-    input, select, textarea, [data-testid="stSelectbox"] div, .toss-card, [data-testid="stForm"] {
+    /* 입력창 및 모든 위젯 배경 화이트 강제 */
+    input, select, textarea, 
+    [data-testid="stSelectbox"] div[data-baseweb="select"],
+    [data-testid="stTextInput"] div[data-baseweb="base-input"],
+    [data-testid="stNumberInput"] div[data-baseweb="input"],
+    [data-testid="stRadio"] div[role="radiogroup"],
+    [data-testid="stForm"],
+    div[data-baseweb="popover"], 
+    div[data-baseweb="menu"], 
+    ul[role="listbox"] {
+        background-color: #ffffff !important;
+        color: #191f28 !important;
         border: 1px solid #e8f3ff !important;
     }
     
@@ -163,10 +187,10 @@ if st.session_state["current_page"] == "Input":
     st.subheader("📝 오늘 얼마나 쓰셨나요?")
     with st.form("input_form", clear_on_submit=True):
         t_type = st.radio("구분", ["지출", "수입"], horizontal=True)
-        t_who = st.radio("주체", ["공동", "영민", "지은"], horizontal=True)
+        t_who = st.radio("주체 (결제자)", all_subjects, horizontal=True)
         c1, c2 = st.columns(2)
         t_date = c1.date_input("날짜", datetime.today())
-        t_cat = c2.selectbox("항목", all_categories)
+        t_cat = c2.selectbox("항목 (분류)", all_categories)
         t_amt = st.number_input("금액 (원)", min_value=0, step=1000)
         t_desc = st.text_input("상세 내역", placeholder="어디에 사용하셨나요?")
         if st.form_submit_button("기록 완료", use_container_width=True):
@@ -246,14 +270,23 @@ elif st.session_state["current_page"] == "Edit":
 # ==========================================
 elif st.session_state["current_page"] == "Upload":
     st.subheader("📂 엑셀/CSV 파일 가져오기")
+    st.info("💡 파일에 새로운 '분류'나 '주체'가 있으면 자동으로 시스템에 등록됩니다.")
     up_file = st.file_uploader("파일 선택", type=['xlsx', 'csv'])
     if up_file:
         up_df = pd.read_csv(up_file) if up_file.name.endswith('.csv') else pd.read_excel(up_file)
-        # 컬럼 매핑
-        col_map = {'항목': '분류', '카테고리': '분류', '구분': '구분', '내용': '내역', '지출액': '금액'}
+        
+        # 컬럼 매핑 및 보정
+        col_map = {'항목': '분류', '카테고리': '분류', '구분': '구분', '내용': '내역', '지출액': '금액', '결제자': '주체', '사용자': '주체'}
         up_df = up_df.rename(columns=col_map)
-        if st.button("장부에 합치기", use_container_width=True, type="primary"):
+        
+        # 주체 및 데이터 보정
+        if '주체' in up_df.columns:
+            up_df['주체'] = up_df['주체'].fillna("공동").replace("남편", "영민").replace("아내", "지은")
+        else:
+            up_df['주체'] = "공동"
+            
+        if st.button("내 장부에 합치기", use_container_width=True, type="primary"):
             master_df = pd.concat([master_df, up_df], ignore_index=True).drop_duplicates()
             save_master_data(master_df)
-            st.success("통합 완료!")
+            st.success("✅ 새로운 항목과 주체를 포함하여 통합되었습니다!")
             st.rerun()
