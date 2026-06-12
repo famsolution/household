@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보험 담보표 만들기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+  :root{
+    --blue:#3182f6;
+    --ink:#191f28;
+    --sub:#8b95a1;
+    --line:#e5e8eb;
+    --bg:#f2f4f6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:24px;
+    font-family:'Pretendard',-apple-system,sans-serif;
+    background:var(--bg); color:var(--ink);
+  }
+  h1{font-size:22px; margin:0 0 4px;}
+  .desc{color:var(--sub); font-size:13px; margin:0 0 20px;}
+
+  .card{
+    background:#fff; border-radius:18px; padding:18px 20px;
+    box-shadow:0 6px 20px rgba(0,0,0,.04); margin-bottom:16px;
+  }
+  .card h2{font-size:15px; margin:0 0 12px; display:flex; align-items:center; gap:6px;}
+
+  /* 버튼 */
+  button{
+    font-family:inherit; cursor:pointer; border:none; border-radius:12px;
+    padding:10px 16px; font-size:14px; font-weight:600; transition:.15s;
+  }
+  .btn-primary{background:var(--blue); color:#fff; box-shadow:0 4px 12px rgba(49,130,246,.25);}
+  .btn-primary:hover{filter:brightness(1.05);}
+  .btn-ghost{background:#eef2f7; color:#4e5968;}
+  .btn-ghost:hover{background:#e2e8f0;}
+  .btn-danger{background:#fff0f0; color:#e54848;}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px;}
+
+  /* 붙여넣기 영역 */
+  textarea{
+    width:100%; min-height:90px; resize:vertical; border:1.5px dashed #cdd5df;
+    border-radius:12px; padding:12px; font-family:inherit; font-size:13px;
+    color:var(--ink); outline:none; background:#fafbfc;
+  }
+  textarea:focus{border-color:var(--blue); background:#fff;}
+  .hint{font-size:12px; color:var(--sub); margin:8px 0 0;}
+
+  /* 옵션 */
+  .opts{display:flex; flex-wrap:wrap; gap:18px; align-items:center;}
+  .opt{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--sub);}
+  .opt-row{display:flex; align-items:center; gap:8px;}
+  input[type=range]{width:120px; accent-color:var(--blue);}
+  input[type=color]{width:38px; height:30px; border:1px solid var(--line); border-radius:8px; padding:0; cursor:pointer; background:#fff;}
+  select{font-family:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:10px; font-size:13px; color:var(--ink); background:#fff;}
+  .switch{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink); cursor:pointer;}
+
+  /* 담보/열 표시 칩 */
+  .chips{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    background:#f1f4f7; border:1px solid var(--line); border-radius:999px;
+    padding:6px 6px 6px 12px; font-size:13px; user-select:none;
+  }
+  .chip.off{opacity:.45; background:#fafafa;}
+  .chip label{display:flex; align-items:center; gap:6px; cursor:pointer;}
+  .chip input{accent-color:var(--blue); width:15px; height:15px; cursor:pointer;}
+  .chip .x{
+    width:20px; height:20px; line-height:18px; text-align:center; border-radius:50%;
+    background:#fff; color:var(--sub); font-size:13px; border:1px solid var(--line);
+  }
+  .chip .x:hover{background:#fff0f0; color:#e54848;}
+
+  /* 표 */
+  #tableWrap{overflow-x:auto; padding:4px;}
+  table{border-collapse:collapse; background:#fff; table-layout:auto;}
+  th,td{
+    border:1px solid var(--cellLine,#c9ced6);
+    padding:var(--cellPadV,10px) var(--cellPadH,14px);
+    font-size:var(--cellFont,14px);
+    text-align:var(--cellAlign,center);
+    white-space:nowrap;            /* 텍스트 길이에 맞춰 열 너비 자동 조절 */
+    vertical-align:middle;
+  }
+  table.wrap th, table.wrap td{white-space:normal; word-break:keep-all;}
+  thead th{
+    background:var(--headBg,#3182f6);
+    color:var(--headFg,#ffffff);
+    font-weight:700;
+  }
+  tbody td:first-child{font-weight:600;}      /* 담보명 강조 */
+  tbody tr:nth-child(even) td{background:var(--zebra,#f8fafc);}
+  [contenteditable]{outline:none;}
+  [contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--blue);}
+  tr.hidden-row{display:none;}
+</style>
+</head>
+<body>
+
+<h1>보험 담보표 만들기 🛡️</h1>
+<p class="desc">엑셀에서 복사한 보장내역을 붙여넣고 · 필요한 담보만 남기고 · 이미지로 저장하세요.</p>
+
+<!-- 1. 붙여넣기 -->
+<div class="card">
+  <h2>① 엑셀에서 복사해 붙여넣기</h2>
+  <textarea id="pasteArea" placeholder="엑셀 셀 범위를 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V) 하세요.&#10;예) 담보명 ▸ 가입금액 ▸ 보험기간 ... 이 한 줄씩 들어옵니다."></textarea>
+  <p class="hint">첫 번째 줄은 제목(헤더)으로, 나머지 줄은 각 담보로 인식됩니다. 셀은 탭(Tab) 단위로 나뉩니다.</p>
+  <div class="toolbar" style="margin-top:12px;">
+    <button class="btn-primary" onclick="buildFromPaste()">📋 붙여넣기로 표 만들기</button>
+    <button class="btn-ghost" onclick="loadSample()">예시 데이터 불러오기</button>
+  </div>
+</div>
+
+<!-- 2. 담보/열 표시 -->
+<div class="card" id="visCard" style="display:none;">
+  <h2>② 표시할 담보 · 열 고르기</h2>
+  <div style="font-size:13px; font-weight:700; color:#4e5968; margin-bottom:8px;">담보(행) — 체크 해제하면 이미지에서 숨겨집니다</div>
+  <div class="chips" id="rowChips"></div>
+  <div style="font-size:13px; font-weight:700; color:#4e5968; margin:16px 0 8px;">열(가로 항목)</div>
+  <div class="chips" id="colChips"></div>
+  <div class="toolbar" style="margin-top:16px;">
+    <button class="btn-ghost" onclick="addRow()">➕ 담보 추가</button>
+    <button class="btn-ghost" onclick="addCol()">➕ 열 추가</button>
+  </div>
+</div>
+
+<!-- 3. 디자인 옵션 -->
+<div class="card" id="optCard" style="display:none;">
+  <h2>③ 디자인 커스텀 (가로 · 세로)</h2>
+  <div class="opts">
+    <div class="opt">글자 크기 <span id="vFont">14px</span>
+      <input type="range" id="font" min="10" max="26" value="14" oninput="applyStyle()"></div>
+    <div class="opt">가로 여백 <span id="vPh">14px</span>
+      <input type="range" id="padH" min="2" max="40" value="14" oninput="applyStyle()"></div>
+    <div class="opt">세로 여백(줄 높이) <span id="vPv">10px</span>
+      <input type="range" id="padV" min="2" max="40" value="10" oninput="applyStyle()"></div>
+    <div class="opt">정렬
+      <select id="align" onchange="applyStyle()">
+        <option value="center">가운데</option>
+        <option value="left">왼쪽</option>
+        <option value="right">오른쪽</option>
+      </select></div>
+    <div class="opt">헤더 색<div class="opt-row">
+      <input type="color" id="headBg" value="#3182f6" oninput="applyStyle()">
+      <input type="color" id="headFg" value="#ffffff" oninput="applyStyle()"></div></div>
+    <div class="opt">테두리 색
+      <input type="color" id="cellLine" value="#c9ced6" oninput="applyStyle()"></div>
+    <div class="opt"> &nbsp;
+      <label class="switch"><input type="checkbox" id="wrap" onchange="applyStyle()"> 긴 글자 줄바꿈 허용</label></div>
+  </div>
+</div>
+
+<!-- 4. 결과 표 + 저장 -->
+<div class="card" id="resultCard" style="display:none;">
+  <h2>④ 미리보기 (셀을 직접 클릭해 수정할 수 있어요)</h2>
+  <div id="tableWrap"></div>
+  <div class="toolbar" style="margin-top:16px;">
+    <button class="btn-primary" onclick="saveImage()">💾 이미지로 저장 (PNG)</button>
+    <button class="btn-ghost" onclick="copyImage()">📎 이미지 복사</button>
+    <button class="btn-danger" onclick="resetAll()">♻️ 초기화</button>
+  </div>
+  <p class="hint">저장 시 체크 해제한 담보·열과 편집 표시선은 빠지고 깔끔한 표만 이미지가 됩니다.</p>
+</div>
+
+<script>
+let colHidden = [];   // 열 숨김 상태
+
+/* ---------- 표 만들기 ---------- */
+function parseGrid(text){
+  return text.replace(/\r/g,'').split('\n')
+    .filter((l,i,arr)=> l.trim()!=='' || i<arr.length-1 && false) // 빈 줄 제거
+    .filter(l=> l.trim()!=='')
+    .map(l=> l.split('\t'));
+}
+
+function buildFromPaste(){
+  const txt = document.getElementById('pasteArea').value;
+  if(!txt.trim()){ alert('먼저 엑셀에서 복사한 내용을 붙여넣어 주세요.'); return; }
+  const grid = parseGrid(txt);
+  // 열 개수 맞추기
+  const cols = Math.max(...grid.map(r=>r.length));
+  grid.forEach(r=>{ while(r.length<cols) r.push(''); });
+  buildTable(grid);
+}
+
+function buildTable(grid){
+  colHidden = new Array(grid[0].length).fill(false);
+  const tbl = document.createElement('table');
+  tbl.id = 'tbl';
+
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  grid[0].forEach(c=>{
+    const th = document.createElement('th');
+    th.contentEditable = true; th.textContent = c;
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr); tbl.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  grid.slice(1).forEach(row=>{
+    const tr = document.createElement('tr');
+    row.forEach(c=>{
+      const td = document.createElement('td');
+      td.contentEditable = true; td.textContent = c;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+
+  const wrap = document.getElementById('tableWrap');
+  wrap.innerHTML = ''; wrap.appendChild(tbl);
+
+  document.getElementById('visCard').style.display = 'block';
+  document.getElementById('optCard').style.display = 'block';
+  document.getElementById('resultCard').style.display = 'block';
+  refreshControls(); applyStyle(); applyColVisibility();
+}
+
+/* ---------- 표시/숨김 컨트롤 ---------- */
+function refreshControls(){
+  const tbl = document.getElementById('tbl');
+  if(!tbl) return;
+
+  // 담보(행)
+  const rowBox = document.getElementById('rowChips'); rowBox.innerHTML='';
+  [...tbl.tBodies[0].rows].forEach((tr,i)=>{
+    const name = tr.cells[0]?.textContent.trim() || `담보 ${i+1}`;
+    const shown = !tr.classList.contains('hidden-row');
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (shown?'':' off');
+    chip.innerHTML = `<label><input type="checkbox" ${shown?'checked':''}> ${escapeHtml(name)}</label><span class="x">✕</span>`;
+    chip.querySelector('input').onchange = e=>{
+      tr.classList.toggle('hidden-row', !e.target.checked);
+      chip.classList.toggle('off', !e.target.checked);
+    };
+    chip.querySelector('.x').onclick = ()=>{ tr.remove(); refreshControls(); };
+    rowBox.appendChild(chip);
+  });
+
+  // 열
+  const colBox = document.getElementById('colChips'); colBox.innerHTML='';
+  [...tbl.tHead.rows[0].cells].forEach((th,i)=>{
+    const name = th.textContent.trim() || `열 ${i+1}`;
+    const shown = !colHidden[i];
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (shown?'':' off');
+    chip.innerHTML = `<label><input type="checkbox" ${shown?'checked':''}> ${escapeHtml(name)}</label><span class="x">✕</span>`;
+    chip.querySelector('input').onchange = e=>{
+      colHidden[i] = !e.target.checked;
+      chip.classList.toggle('off', !e.target.checked);
+      applyColVisibility();
+    };
+    chip.querySelector('.x').onclick = ()=>{ deleteCol(i); };
+    colBox.appendChild(chip);
+  });
+}
+
+function applyColVisibility(){
+  const tbl = document.getElementById('tbl');
+  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{
+    [...tr.cells].forEach((cell,i)=> cell.style.display = colHidden[i] ? 'none' : '');
+  });
+}
+
+/* ---------- 행/열 추가·삭제 ---------- */
+function addRow(){
+  const tbl = document.getElementById('tbl');
+  const n = tbl.tHead.rows[0].cells.length;
+  const tr = tbl.tBodies[0].insertRow();
+  for(let i=0;i<n;i++){ const td=tr.insertCell(); td.contentEditable=true; td.textContent=''; }
+  refreshControls(); applyColVisibility();
+}
+function addCol(){
+  const tbl = document.getElementById('tbl');
+  const th = document.createElement('th'); th.contentEditable=true; th.textContent='새 열';
+  tbl.tHead.rows[0].appendChild(th);
+  [...tbl.tBodies[0].rows].forEach(tr=>{ const td=tr.insertCell(); td.contentEditable=true; td.textContent=''; });
+  colHidden.push(false);
+  refreshControls(); applyColVisibility();
+}
+function deleteCol(i){
+  const tbl = document.getElementById('tbl');
+  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=> tr.deleteCell(i));
+  colHidden.splice(i,1);
+  refreshControls(); applyColVisibility();
+}
+
+/* ---------- 스타일 ---------- */
+function applyStyle(){
+  const r = document.documentElement.style;
+  const f = document.getElementById('font').value;
+  const ph = document.getElementById('padH').value;
+  const pv = document.getElementById('padV').value;
+  r.setProperty('--cellFont', f+'px');
+  r.setProperty('--cellPadH', ph+'px');
+  r.setProperty('--cellPadV', pv+'px');
+  r.setProperty('--cellAlign', document.getElementById('align').value);
+  r.setProperty('--headBg', document.getElementById('headBg').value);
+  r.setProperty('--headFg', document.getElementById('headFg').value);
+  r.setProperty('--cellLine', document.getElementById('cellLine').value);
+  document.getElementById('vFont').textContent=f+'px';
+  document.getElementById('vPh').textContent=ph+'px';
+  document.getElementById('vPv').textContent=pv+'px';
+  document.getElementById('tbl')?.classList.toggle('wrap', document.getElementById('wrap').checked);
+}
+
+/* ---------- 이미지 저장 ---------- */
+function renderCanvas(){
+  const tbl = document.getElementById('tbl');
+  return html2canvas(tbl, {scale:2, backgroundColor:'#ffffff'});
+}
+function saveImage(){
+  if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
+  renderCanvas().then(canvas=>{
+    const a=document.createElement('a');
+    a.download='보험담보표.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  });
+}
+async function copyImage(){
+  if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다.'); return; }
+  try{
+    const canvas = await renderCanvas();
+    canvas.toBlob(async b=>{
+      await navigator.clipboard.write([new ClipboardItem({'image/png':b})]);
+      alert('이미지가 클립보드에 복사되었습니다. 바로 붙여넣기(Ctrl+V) 하세요.');
+    });
+  }catch(e){ alert('이 브라우저에서는 이미지 복사가 지원되지 않습니다. "이미지로 저장"을 이용해 주세요.'); }
+}
+
+/* ---------- 기타 ---------- */
+function resetAll(){
+  if(!confirm('표를 모두 지우고 처음으로 돌아갈까요?')) return;
+  document.getElementById('pasteArea').value='';
+  document.getElementById('tableWrap').innerHTML='';
+  ['visCard','optCard','resultCard'].forEach(id=> document.getElementById(id).style.display='none');
+}
+function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function loadSample(){
+  document.getElementById('pasteArea').value =
+`담보명\t가입금액\t보험기간\t납입기간\t보험료
+상해사망\t1억원\t100세\t20년\t3,200원
+상해후유장해\t1억원\t100세\t20년\t1,100원
+질병사망\t5천만원\t100세\t20년\t8,500원
+암진단비(유사암제외)\t5천만원\t100세\t20년\t12,300원
+뇌혈관질환진단비\t2천만원\t100세\t20년\t6,400원
+허혈성심장질환진단비\t2천만원\t100세\t20년\t4,900원
+질병입원일당\t3만원\t100세\t20년\t2,700원`;
+  buildFromPaste();
+}
+
+/* 페이지 어디서든 붙여넣기하면 자동으로 텍스트박스에 채움 */
+document.addEventListener('paste', e=>{
+  if(document.activeElement && document.activeElement.isContentEditable) return; // 셀 편집 중엔 통과
+  const t = (e.clipboardData||window.clipboardData).getData('text');
+  if(t && t.includes('\t')){
+    document.getElementById('pasteArea').value = t;
+  }
+});
+</script>
+</body>
+</html>
