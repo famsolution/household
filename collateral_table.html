@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>보험 담보표 만들기</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
@@ -186,14 +187,20 @@
 
 <!-- 1. 입력 -->
 <div class="card">
-  <h2>① 표 만들기 — 직접 입력 또는 붙여넣기</h2>
+  <h2>① 표 만들기 — 엑셀 파일 · 직접 입력 · 붙여넣기</h2>
+  <div class="toolbar" style="margin-bottom:12px;">
+    <button class="btn-primary" onclick="document.getElementById('excelFile').click()">📊 엑셀/CSV 파일 불러오기</button>
+    <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this.files[0])">
+    <span id="sheetTabs" style="display:none; align-items:center; gap:6px; font-size:12px; color:var(--sub);">시트 선택
+      <select id="excelSheet" onchange="applyExcelSheet()"></select></span>
+  </div>
   <div class="opts" style="margin-bottom:12px;">
     <div class="opt">담보(행) 수<input type="number" id="blankRows" value="8" min="1" max="200" style="width:80px; padding:7px 10px; border:1px solid var(--line); border-radius:10px;"></div>
     <div class="opt">열 수<input type="number" id="blankCols" value="5" min="1" max="40" style="width:80px; padding:7px 10px; border:1px solid var(--line); border-radius:10px;"></div>
-    <button class="btn-primary" onclick="newBlankSheet()" style="align-self:flex-end;">🆕 빈 시트로 시작</button>
+    <button class="btn-ghost" onclick="newBlankSheet()" style="align-self:flex-end;">🆕 빈 시트로 시작</button>
   </div>
   <textarea id="pasteArea" placeholder="또는, 엑셀 셀 범위를 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V) 하세요.&#10;예) 담보명 ▸ 가입금액 ▸ 보험기간 ... 이 한 줄씩 들어옵니다."></textarea>
-  <p class="hint">빈 시트에서는 <b>Tab</b>=오른쪽 칸, <b>Enter</b>=아래 칸, <b>Alt+Enter</b>=칸 안 줄바꿈으로 엑셀처럼 빠르게 입력할 수 있어요. 셀을 클릭해 바로 수정도 됩니다.</p>
+  <p class="hint"><b>엑셀 파일</b>을 그대로 불러오거나, 빈 시트에서 <b>Tab</b>=오른쪽 · <b>Enter</b>=아래 · <b>Alt+Enter</b>=칸 안 줄바꿈으로 입력하세요. 셀을 클릭해 바로 수정도 됩니다.<br><span style="color:#b0676a;">※ 엑셀의 병합된 셀은 가장 왼쪽·위 칸에만 값이 들어오고 나머지는 빈칸으로 불러와집니다(불러온 뒤 수정 가능).</span></p>
   <div class="toolbar" style="margin-top:12px;">
     <button class="btn-ghost" onclick="buildFromPaste()">📋 붙여넣기로 표 만들기</button>
     <button class="btn-ghost" onclick="loadSample()">예시 데이터 불러오기</button>
@@ -324,6 +331,38 @@ function buildFromPaste(){
   const cols = Math.max(...grid.map(r=>r.length));
   grid.forEach(r=>{ while(r.length<cols) r.push(''); });
   buildTable(grid);
+}
+
+/* ---------- 엑셀/CSV 파일 불러오기 ---------- */
+let _wb = null;
+function importExcel(file){
+  if(!file) return;
+  if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    try{
+      _wb = XLSX.read(fr.result, {type:'array'});
+      const sel = document.getElementById('excelSheet'); sel.innerHTML='';
+      _wb.SheetNames.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+      document.getElementById('sheetTabs').style.display = _wb.SheetNames.length>1 ? 'inline-flex' : 'none';
+      sel.value = _wb.SheetNames[0];
+      applyExcelSheet();
+      // 시트 이름을 저장 이름 기본값으로
+      const sn=document.getElementById('sheetName'); if(sn && !sn.value) sn.value=file.name.replace(/\.(xlsx?|csv)$/i,'');
+    }catch(e){ alert('엑셀 파일을 읽을 수 없습니다: '+e.message); }
+  };
+  fr.readAsArrayBuffer(file);
+  document.getElementById('excelFile').value = '';   // 같은 파일 다시 선택 가능하도록
+}
+function applyExcelSheet(){
+  if(!_wb) return;
+  const ws = _wb.Sheets[document.getElementById('excelSheet').value];
+  let aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:''});
+  aoa = aoa.filter(r=> r.some(c=> String(c).trim()!==''));   // 빈 행 제거
+  if(aoa.length===0){ alert('이 시트에 데이터가 없습니다.'); return; }
+  const cols = Math.max(...aoa.map(r=>r.length));
+  aoa.forEach(r=>{ while(r.length<cols) r.push(''); for(let i=0;i<r.length;i++) r[i]=String(r[i]); });
+  buildTable(aoa);
 }
 
 function buildTable(grid){
