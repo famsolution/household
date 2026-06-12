@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>상품 비교표</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{--blue:#3182f6; --ink:#191f28; --sub:#8b95a1; --line:#e5e8eb;}
+  *{box-sizing:border-box;}
+  body{margin:0; padding:24px; font-family:'Pretendard',sans-serif; background:#f2f4f6; color:var(--ink);}
+  h1{font-size:22px; margin:0 0 4px;}
+  .desc{color:var(--sub); font-size:13px; margin:0 0 20px;}
+  .card{background:#fff; border-radius:18px; padding:18px 20px; box-shadow:0 6px 20px rgba(0,0,0,.04); margin-bottom:16px;}
+  .card h2{font-size:15px; margin:0 0 12px;}
+  button{font-family:inherit; cursor:pointer; border:none; border-radius:12px; padding:10px 16px; font-size:14px; font-weight:600;}
+  .btn-primary{background:var(--blue); color:#fff;} .btn-ghost{background:#eef2f7; color:#4e5968;} .btn-danger{background:#fff0f0; color:#e54848;}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  label.switch{display:flex; align-items:center; gap:6px; font-size:13px;}
+  #cmpWrap{overflow-x:auto;}
+  table{border-collapse:collapse; background:#fff;}
+  th,td{border:1px solid #d7dce3; padding:12px 16px; font-size:14px; text-align:center; white-space:nowrap;}
+  thead th{background:var(--blue); color:#fff; font-weight:800;}
+  td.nm, th.nm{text-align:left; font-weight:700; position:sticky; left:0; background:#f8fafc;}
+  thead th.nm{background:#1d4ed8;}
+  td.best{background:#e8f8ee; color:#0a8f4d; font-weight:800; box-shadow:inset 0 0 0 2px #34d27a;}
+  [contenteditable]{outline:none;}
+  [contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--blue);}
+  .prodHdr{display:flex; align-items:center; gap:6px; justify-content:center;}
+  .prodHdr .rm{background:rgba(255,255,255,.25); border-radius:50%; width:20px; height:20px; line-height:18px; font-size:12px;}
+  .nav{font-size:13px; margin-bottom:8px;} .nav a{color:var(--blue); text-decoration:none; font-weight:700;}
+</style>
+</head>
+<body>
+<div class="nav"><a href="tools.html">🧰 도구 모음</a> · <a href="collateral_table.html">🛡️ 담보표</a></div>
+<h1>상품 비교표 ⚖️</h1>
+<p class="desc">여러 상품을 나란히 두고 담보별 금액을 비교하세요. 담보표(.json)를 상품으로 불러오면 담보명이 자동 정렬되고, 행마다 가장 높은 금액이 강조됩니다.</p>
+
+<div class="card">
+  <h2>① 상품 추가 / 설정</h2>
+  <div class="toolbar">
+    <button class="btn-ghost" onclick="document.getElementById('jsonFile').click()">📥 담보표(.json)를 상품으로 추가</button>
+    <input type="file" id="jsonFile" accept=".json" style="display:none" onchange="importProduct(this.files[0])">
+    <button class="btn-ghost" onclick="addProduct()">➕ 빈 상품 추가</button>
+    <button class="btn-ghost" onclick="addRow()">➕ 담보 행 추가</button>
+    <button class="btn-ghost" onclick="loadSample()">예시 불러오기</button>
+    <label class="switch"><input type="checkbox" id="hl" checked onchange="render()"> 행별 최고 금액 강조</label>
+  </div>
+  <div id="colPick" style="display:none; margin-top:12px; font-size:12px; color:var(--sub);">
+    불러올 금액 열: <select id="impCol"></select>
+    <button class="btn-ghost" onclick="confirmImport()" style="padding:6px 12px;">불러오기 확정</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>② 비교표 (셀 클릭해 수정)</h2>
+  <div id="cmpWrap"></div>
+  <div class="toolbar" style="margin-top:16px;">
+    <button class="btn-primary" onclick="saveImage()">💾 이미지로 저장</button>
+    <button class="btn-danger" onclick="clearAll()">♻️ 비우기</button>
+  </div>
+</div>
+
+<script>
+const LS='cmp_v1';
+let products=[];          // [상품명, ...]
+let rows=[];              // [{name, vals:[]}]  vals[productIndex]
+let pendingSheet=null;
+
+function parseNum(s){ const m=String(s||'').replace(/[^\d]/g,''); return m?parseInt(m,10):null; }
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function addProduct(name='새 상품'){ products.push(name); rows.forEach(r=>r.vals.push('')); render(); save(); }
+function addRow(name='새 담보'){ rows.push({name, vals:products.map(()=> '')}); render(); save(); }
+function removeProduct(i){ products.splice(i,1); rows.forEach(r=>r.vals.splice(i,1)); render(); save(); }
+function removeRow(i){ rows.splice(i,1); render(); save(); }
+
+function findRow(name){ return rows.find(r=>r.name.trim()===name.trim()); }
+
+function importProduct(file){
+  if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ try{
+    pendingSheet=JSON.parse(fr.result);
+    const sel=document.getElementById('impCol'); sel.innerHTML='';
+    pendingSheet.head.forEach((h,i)=>{ if(i===0)return; const o=document.createElement('option'); o.value=i; o.textContent=h||('열'+i); sel.appendChild(o); });
+    sel.value=pendingSheet.head.length-1;
+    document.getElementById('colPick').style.display='';
+  }catch(e){ alert('JSON을 읽을 수 없습니다.'); } };
+  fr.readAsText(file);
+}
+function confirmImport(){
+  if(!pendingSheet) return;
+  const col=+document.getElementById('impCol').value;
+  const pname=pendingSheet.name || ('상품 '+(products.length+1));
+  products.push(pname);
+  const pi=products.length-1;
+  rows.forEach(r=> r.vals[pi]='');               // 새 열 자리 확보
+  pendingSheet.rows.filter(r=>!r.hidden && (r.cells[0]||'').trim()).forEach(r=>{
+    let row=findRow(r.cells[0]);
+    if(!row){ row={name:r.cells[0], vals:products.map(()=> '')}; rows.push(row); }
+    row.vals[pi]=r.cells[col]||'';
+  });
+  pendingSheet=null; document.getElementById('colPick').style.display='none';
+  render(); save();
+}
+
+function render(){
+  const wrap=document.getElementById('cmpWrap');
+  if(products.length===0 && rows.length===0){ wrap.innerHTML='<p style="color:#8b95a1">상품을 추가하거나 예시를 불러오세요.</p>'; return; }
+  const hl=document.getElementById('hl').checked;
+  const tbl=document.createElement('table');
+  // 헤더
+  const thead=document.createElement('thead'); const htr=document.createElement('tr');
+  const c0=document.createElement('th'); c0.className='nm'; c0.textContent='담보 / 상품'; htr.appendChild(c0);
+  products.forEach((p,pi)=>{
+    const th=document.createElement('th');
+    th.innerHTML=`<div class="prodHdr"><span contenteditable>${esc(p)}</span><span class="rm">✕</span></div>`;
+    th.querySelector('[contenteditable]').oninput=e=>{ products[pi]=e.target.textContent; save(); };
+    th.querySelector('.rm').onclick=()=>removeProduct(pi);
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr); tbl.appendChild(thead);
+  // 본문
+  const tbody=document.createElement('tbody');
+  rows.forEach((r,ri)=>{
+    const tr=document.createElement('tr');
+    const nm=document.createElement('td'); nm.className='nm'; nm.contentEditable=true; nm.textContent=r.name;
+    nm.oninput=()=>{ r.name=nm.textContent; save(); };
+    tr.appendChild(nm);
+    const nums=r.vals.map(parseNum).filter(v=>v!=null);
+    const max=nums.length?Math.max(...nums):null;
+    r.vals.forEach((v,pi)=>{
+      const td=document.createElement('td'); td.contentEditable=true; td.textContent=v;
+      if(hl && max!=null && parseNum(v)===max && parseNum(v)!=null) td.classList.add('best');
+      td.oninput=()=>{ r.vals[pi]=td.textContent; updateRowBest(tr,r); save(); };
+      tr.appendChild(td);
+    });
+    // 행 삭제 (담보명 더블클릭)
+    nm.ondblclick=()=>{ if(confirm(`"${r.name}" 행을 삭제할까요?`)) removeRow(ri); };
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  wrap.innerHTML=''; wrap.appendChild(tbl);
+}
+function updateRowBest(tr,r){
+  if(!document.getElementById('hl').checked) return;
+  const nums=r.vals.map(parseNum).filter(v=>v!=null);
+  const max=nums.length?Math.max(...nums):null;
+  [...tr.cells].slice(1).forEach((td,pi)=>{
+    const n=parseNum(r.vals[pi]);
+    td.classList.toggle('best', max!=null && n===max && n!=null);
+  });
+}
+function loadSample(){
+  products=['A생명 든든암','B화재 실속암','C손보 프리미엄'];
+  rows=[
+    {name:'암진단비', vals:['5,000','3,000','5,000']},
+    {name:'뇌혈관질환진단비', vals:['2,000','1,000','3,000']},
+    {name:'허혈성심장질환진단비', vals:['2,000','1,000','2,000']},
+    {name:'암수술비(회당)', vals:['500','300','1,000']},
+    {name:'질병입원일당', vals:['3','2','5']},
+  ];
+  render(); save();
+}
+function saveImage(){
+  if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다.'); return; }
+  html2canvas(document.querySelector('#cmpWrap table'),{scale:2, backgroundColor:'#fff'}).then(c=>{
+    const a=document.createElement('a'); a.download='상품비교표.png'; a.href=c.toDataURL('image/png'); a.click();
+  });
+}
+function clearAll(){ if(!confirm('비울까요?'))return; products=[]; rows=[]; render(); save(); }
+function save(){ localStorage.setItem(LS, JSON.stringify({products,rows})); }
+
+window.addEventListener('DOMContentLoaded',()=>{
+  try{ const s=JSON.parse(localStorage.getItem(LS)||'null'); if(s){ products=s.products||[]; rows=s.rows||[]; } }catch(e){}
+  if(products.length===0 && rows.length===0) loadSample(); else render();
+});
+</script>
+</body>
+</html>

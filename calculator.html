@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보장 합계 계산기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{--blue:#3182f6; --ink:#191f28; --sub:#8b95a1; --line:#e5e8eb;}
+  *{box-sizing:border-box;}
+  body{margin:0; padding:24px; font-family:'Pretendard',sans-serif; background:#f2f4f6; color:var(--ink);}
+  h1{font-size:22px; margin:0 0 4px;}
+  .desc{color:var(--sub); font-size:13px; margin:0 0 20px;}
+  .card{background:#fff; border-radius:18px; padding:18px 20px; box-shadow:0 6px 20px rgba(0,0,0,.04); margin-bottom:16px;}
+  .card h2{font-size:15px; margin:0 0 12px;}
+  button{font-family:inherit; cursor:pointer; border:none; border-radius:12px; padding:10px 16px; font-size:14px; font-weight:600;}
+  .btn-primary{background:var(--blue); color:#fff;} .btn-ghost{background:#eef2f7; color:#4e5968;} .btn-danger{background:#fff0f0; color:#e54848;}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  input[type=text], select{font-family:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; font-size:13px; background:#fff; color:var(--ink);}
+  table{border-collapse:collapse; width:100%;}
+  th,td{border-bottom:1px solid #eef1f4; padding:10px 8px; font-size:14px; text-align:right;}
+  th{color:var(--sub); font-size:12px; font-weight:700;}
+  td.nm, th.nm{text-align:left;}
+  td.nm{font-weight:600;}
+  tr.off{opacity:.4;}
+  .chk{width:18px; height:18px; accent-color:var(--blue); cursor:pointer;}
+  .opt{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--sub);}
+  .opts{display:flex; flex-wrap:wrap; gap:16px; align-items:center;}
+  /* 결과 카드 */
+  #result{background:linear-gradient(135deg,#1d4ed8,#3182f6); color:#fff; border-radius:20px; padding:28px 30px;}
+  #result .rt{font-size:15px; opacity:.85;}
+  #result .big{font-size:40px; font-weight:900; letter-spacing:-1px; margin:4px 0 14px;}
+  #result .sub{font-size:16px; opacity:.95;}
+  #result .list{margin-top:18px; border-top:1px solid rgba(255,255,255,.25); padding-top:14px; font-size:14px; line-height:1.8;}
+  .nav{font-size:13px; margin-bottom:8px;} .nav a{color:var(--blue); text-decoration:none; font-weight:700;}
+</style>
+</head>
+<body>
+<div class="nav"><a href="tools.html">🧰 도구 모음</a> · <a href="collateral_table.html">🛡️ 담보표</a></div>
+<h1>보장 합계 계산기 🧮</h1>
+<p class="desc">담보표(.json)를 불러오거나 직접 추가해, 선택한 담보의 가입금액·보험료 합계를 즉시 계산하고 이미지로 저장하세요.</p>
+
+<div class="card">
+  <h2>① 담보 불러오기 / 설정</h2>
+  <div class="toolbar">
+    <button class="btn-ghost" onclick="document.getElementById('jsonFile').click()">📥 담보표(.json) 불러오기</button>
+    <input type="file" id="jsonFile" accept=".json" style="display:none" onchange="importSheet(this.files[0])">
+    <button class="btn-ghost" onclick="addItem()">➕ 담보 직접 추가</button>
+    <button class="btn-ghost" onclick="loadSample()">예시 불러오기</button>
+  </div>
+  <div class="opts" id="colPick" style="display:none; margin-top:12px;">
+    <div class="opt">가입금액 열<select id="amtCol" onchange="remap()"></select></div>
+    <div class="opt">보험료 열(선택)<select id="feeCol" onchange="remap()"></select></div>
+    <div class="opt">금액 단위<input type="text" id="unit" value="만원" oninput="render()" style="width:70px;"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>② 담보 선택 (체크한 담보만 합산)</h2>
+  <table>
+    <thead><tr><th style="width:34px"></th><th class="nm">담보명</th><th>가입금액</th><th>보험료</th><th style="width:34px"></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>③ 합계 결과</h2>
+  <div id="result"></div>
+  <div class="toolbar" style="margin-top:16px;">
+    <button class="btn-primary" onclick="saveImage()">💾 결과 이미지 저장</button>
+    <button class="btn-danger" onclick="clearAll()">♻️ 비우기</button>
+  </div>
+</div>
+
+<script>
+const LS='calc_items_v1';
+let items=[];   // {name, amt, fee, on}
+let sheet=null;
+
+function parseNum(s){ const m=String(s||'').replace(/[^\d]/g,''); return m?parseInt(m,10):0; }
+function fmt(n){ return n.toLocaleString('ko-KR'); }
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function val(id){ return document.getElementById(id).value; }
+
+function addItem(name='', amt='', fee=''){ items.push({name, amt, fee, on:true}); renderRows(); render(); }
+
+function renderRows(){
+  const tb=document.getElementById('rows'); tb.innerHTML='';
+  items.forEach((it,i)=>{
+    const tr=document.createElement('tr'); if(!it.on) tr.className='off';
+    tr.innerHTML=`<td><input type="checkbox" class="chk" ${it.on?'checked':''}></td>
+      <td class="nm"><input type="text" value="${esc(it.name)}" style="width:100%; border:none; background:none;" placeholder="담보명"></td>
+      <td><input type="text" value="${esc(it.amt)}" style="width:90px; text-align:right; border:none; background:none;" placeholder="0"></td>
+      <td><input type="text" value="${esc(it.fee)}" style="width:80px; text-align:right; border:none; background:none;" placeholder="0"></td>
+      <td><button class="btn-danger" style="padding:4px 8px;">✕</button></td>`;
+    const [chk]=tr.querySelectorAll('.chk');
+    const ins=tr.querySelectorAll('input[type=text]');
+    chk.onchange=()=>{ it.on=chk.checked; tr.classList.toggle('off',!it.on); render(); save(); };
+    ins[0].oninput=()=>{ it.name=ins[0].value; render(); save(); };
+    ins[1].oninput=()=>{ it.amt=ins[1].value; render(); save(); };
+    ins[2].oninput=()=>{ it.fee=ins[2].value; render(); save(); };
+    tr.querySelector('.btn-danger').onclick=()=>{ items.splice(i,1); renderRows(); render(); save(); };
+    tb.appendChild(tr);
+  });
+}
+
+function render(){
+  const unit=val('unit');
+  const sel=items.filter(it=>it.on);
+  const amtSum=sel.reduce((s,it)=>s+parseNum(it.amt),0);
+  const feeSum=sel.reduce((s,it)=>s+parseNum(it.fee),0);
+  const listHtml = sel.filter(it=>it.name).map(it=>`· ${esc(it.name)} <b>${fmt(parseNum(it.amt))}${esc(unit)}</b>`).join('<br>');
+  document.getElementById('result').innerHTML=`
+    <div class="rt">선택 담보 ${sel.length}건 · 총 가입금액</div>
+    <div class="big">${fmt(amtSum)} ${esc(unit)}</div>
+    ${feeSum>0?`<div class="sub">합계 보험료 ${fmt(feeSum)} 원</div>`:''}
+    ${listHtml?`<div class="list">${listHtml}</div>`:''}`;
+  save();
+}
+
+function importSheet(file){
+  if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ try{
+    sheet=JSON.parse(fr.result);
+    const fill=sel=>{ sel.innerHTML=''; sheet.head.forEach((h,i)=>{ if(i===0)return; const o=document.createElement('option'); o.value=i; o.textContent=h||('열'+i); sel.appendChild(o); }); };
+    const a=document.getElementById('amtCol'), f=document.getElementById('feeCol');
+    fill(a); fill(f);
+    const none=document.createElement('option'); none.value=-1; none.textContent='없음'; f.insertBefore(none,f.firstChild); f.value=-1;
+    a.value=1;
+    document.getElementById('colPick').style.display='';
+    remap();
+  }catch(e){ alert('JSON을 읽을 수 없습니다.'); } };
+  fr.readAsText(file);
+}
+function remap(){
+  if(!sheet) return;
+  const ac=+val('amtCol'), fc=+val('feeCol');
+  items=sheet.rows.filter(r=>!r.hidden && (r.cells[0]||'').trim())
+    .map(r=>({name:r.cells[0], amt:r.cells[ac]||'', fee:fc>=0?(r.cells[fc]||''):'', on:true}));
+  renderRows(); render();
+}
+function loadSample(){
+  items=[{name:'암진단비',amt:'5,000',fee:'12,300',on:true},
+         {name:'뇌혈관질환진단비',amt:'2,000',fee:'6,400',on:true},
+         {name:'허혈성심장질환진단비',amt:'2,000',fee:'4,900',on:true},
+         {name:'질병입원일당',amt:'3',fee:'2,700',on:true}];
+  renderRows(); render();
+}
+function saveImage(){
+  if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다.'); return; }
+  html2canvas(document.getElementById('result'),{scale:2}).then(c=>{
+    const a=document.createElement('a'); a.download='보장합계.png'; a.href=c.toDataURL('image/png'); a.click();
+  });
+}
+function clearAll(){ if(!confirm('비울까요?'))return; items=[]; sheet=null; document.getElementById('colPick').style.display='none'; renderRows(); render(); }
+function save(){ localStorage.setItem(LS, JSON.stringify(items)); }
+
+window.addEventListener('DOMContentLoaded',()=>{
+  try{ const s=localStorage.getItem(LS); if(s) items=JSON.parse(s); }catch(e){}
+  if(items.length===0) loadSample(); else { renderRows(); render(); }
+});
+</script>
+</body>
+</html>
