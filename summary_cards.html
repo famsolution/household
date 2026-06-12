@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보장 요약 카드 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{--blue:#3182f6; --ink:#191f28; --sub:#8b95a1; --line:#e5e8eb; --bg:#f2f4f6;}
+  *{box-sizing:border-box;}
+  body{margin:0; padding:24px; font-family:'Pretendard',sans-serif; background:var(--bg); color:var(--ink);}
+  h1{font-size:22px; margin:0 0 4px;}
+  .desc{color:var(--sub); font-size:13px; margin:0 0 20px;}
+  .card{background:#fff; border-radius:18px; padding:18px 20px; box-shadow:0 6px 20px rgba(0,0,0,.04); margin-bottom:16px;}
+  .card h2{font-size:15px; margin:0 0 12px;}
+  button{font-family:inherit; cursor:pointer; border:none; border-radius:12px; padding:10px 16px; font-size:14px; font-weight:600;}
+  .btn-primary{background:var(--blue); color:#fff;}
+  .btn-ghost{background:#eef2f7; color:#4e5968;}
+  .btn-danger{background:#fff0f0; color:#e54848;}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  input[type=text], input[type=number], select{font-family:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; font-size:13px; color:var(--ink); background:#fff;}
+  input[type=color]{width:34px; height:28px; border:1px solid var(--line); border-radius:8px; padding:0; cursor:pointer;}
+  input[type=range]{accent-color:var(--blue);}
+  .opts{display:flex; flex-wrap:wrap; gap:16px; align-items:center;}
+  .opt{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--sub);}
+
+  /* 입력 리스트 */
+  .editRow{display:grid; grid-template-columns:1.4fr 1fr 1.8fr 36px; gap:8px; margin-bottom:8px;}
+  .editRow input{width:100%;}
+  .editRow .del{background:#fff0f0; color:#e54848; border-radius:10px;}
+  .colhead{display:grid; grid-template-columns:1.4fr 1fr 1.8fr 36px; gap:8px; font-size:12px; color:var(--sub); font-weight:700; margin-bottom:6px;}
+
+  /* 보드 / 카드 */
+  #board{background:var(--boardBg,#0f172a); border-radius:18px; padding:28px; display:grid; gap:18px;
+         grid-template-columns:repeat(var(--cols,3), 1fr);}
+  #boardTitle{grid-column:1/-1; color:var(--titleColor,#fff); font-size:26px; font-weight:800; text-align:center; margin-bottom:4px;}
+  .vcard{background:var(--cardBg,#fff); border-radius:18px; padding:22px 20px; position:relative; overflow:hidden;
+         box-shadow:0 10px 30px rgba(0,0,0,.18); animation:rise .4s ease both;}
+  .vcard::before{content:''; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--accent,#3182f6);}
+  .vcard .emoji{font-size:26px;}
+  .vcard .nm{font-size:17px; font-weight:800; color:var(--cardInk,#191f28); margin:6px 0 10px;}
+  .vcard .amt{font-size:30px; font-weight:900; color:var(--accent,#3182f6); letter-spacing:-.5px;}
+  .vcard .amt small{font-size:15px; font-weight:700; color:var(--sub); margin-left:2px;}
+  .vcard .note{font-size:13px; color:#6b7280; margin-top:10px; line-height:1.5; white-space:pre-wrap;}
+  @keyframes rise{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
+  .nav{font-size:13px; margin-bottom:14px;}
+  .nav a{color:var(--blue); text-decoration:none; font-weight:700;}
+</style>
+</head>
+<body>
+
+<div class="nav"><a href="collateral_table.html">← 담보표 도구로</a></div>
+<h1>보장 요약 카드 생성기 🪪</h1>
+<p class="desc">담보표(.json)를 불러오거나 직접 입력해, 고객에게 보여줄 깔끔한 보장 요약 카드를 만들고 이미지로 저장하세요.</p>
+
+<!-- 입력 -->
+<div class="card">
+  <h2>① 내용 입력</h2>
+  <div class="toolbar" style="margin-bottom:14px;">
+    <button class="btn-ghost" onclick="document.getElementById('jsonFile').click()">📥 담보표(.json) 불러오기</button>
+    <input type="file" id="jsonFile" accept=".json,application/json" style="display:none" onchange="importSheet(this.files[0])">
+    <span id="colPick" style="display:none;" class="opt">금액으로 쓸 열
+      <select id="amtCol" onchange="remapFromSheet()"></select></span>
+    <button class="btn-ghost" onclick="loadSample()">예시 불러오기</button>
+  </div>
+  <div class="colhead"><span>담보명</span><span>금액</span><span>한 줄 설명(선택)</span><span></span></div>
+  <div id="editList"></div>
+  <button class="btn-ghost" onclick="addItem()" style="margin-top:6px;">➕ 담보 추가</button>
+</div>
+
+<!-- 디자인 -->
+<div class="card">
+  <h2>② 디자인</h2>
+  <div class="opts">
+    <div class="opt">제목<input type="text" id="title" value="고객님 맞춤 보장 요약" oninput="render()" style="width:200px;"></div>
+    <div class="opt">한 줄 카드 수 <span id="vCols">3개</span>
+      <input type="range" id="cols" min="1" max="5" value="3" oninput="render()"></div>
+    <div class="opt">금액 단위<input type="text" id="unit" value="만원" oninput="render()" style="width:70px;"></div>
+    <div class="opt">강조색<input type="color" id="accent" value="#3182f6" oninput="render()"></div>
+    <div class="opt">카드색<input type="color" id="cardBg" value="#ffffff" oninput="render()"></div>
+    <div class="opt">보드 배경<input type="color" id="boardBg" value="#0f172a" oninput="render()"></div>
+    <div class="opt">제목색<input type="color" id="titleColor" value="#ffffff" oninput="render()"></div>
+  </div>
+</div>
+
+<!-- 미리보기 -->
+<div class="card">
+  <h2>③ 미리보기</h2>
+  <div id="board"></div>
+  <div class="toolbar" style="margin-top:16px;">
+    <button class="btn-primary" onclick="saveImage()">💾 이미지로 저장 (PNG)</button>
+    <button class="btn-danger" onclick="clearAll()">♻️ 비우기</button>
+  </div>
+</div>
+
+<script>
+const LS='sc_items_v1';
+let items = [];        // {name, amount, note, emoji}
+let sheet = null;      // 불러온 담보표 원본
+
+function emojiFor(name){
+  const map=[['암','🎗️'],['수술','🏥'],['진단','🩺'],['입원','🛏️'],['통원','🚶'],['사망','🕊️'],['재활','💪'],['치료','💊'],['검사','🔬'],['방사선','☢️'],['실손','🧾']];
+  for(const [k,e] of map) if(name && name.includes(k)) return e;
+  return '🛡️';
+}
+
+function addItem(name='', amount='', note=''){
+  items.push({name, amount, note, emoji:emojiFor(name)});
+  renderEditor(); render();
+}
+function renderEditor(){
+  const box=document.getElementById('editList'); box.innerHTML='';
+  items.forEach((it,i)=>{
+    const row=document.createElement('div'); row.className='editRow';
+    row.innerHTML=`<input type="text" value="${esc(it.name)}" placeholder="예) 암진단비">
+                   <input type="text" value="${esc(it.amount)}" placeholder="예) 5,000">
+                   <input type="text" value="${esc(it.note)}" placeholder="예) 최초 1회 지급">
+                   <button class="del">✕</button>`;
+    const [n,a,no]=row.querySelectorAll('input');
+    n.oninput=()=>{ it.name=n.value; it.emoji=emojiFor(n.value); render(); save(); };
+    a.oninput=()=>{ it.amount=a.value; render(); save(); };
+    no.oninput=()=>{ it.note=no.value; render(); save(); };
+    row.querySelector('.del').onclick=()=>{ items.splice(i,1); renderEditor(); render(); save(); };
+    box.appendChild(row);
+  });
+}
+function render(){
+  const g=document.documentElement.style;
+  g.setProperty('--cols', document.getElementById('cols').value);
+  g.setProperty('--accent', val('accent'));
+  g.setProperty('--cardBg', val('cardBg'));
+  g.setProperty('--boardBg', val('boardBg'));
+  g.setProperty('--titleColor', val('titleColor'));
+  document.getElementById('vCols').textContent=document.getElementById('cols').value+'개';
+  const unit=val('unit');
+  const board=document.getElementById('board'); board.innerHTML='';
+  const t=document.createElement('div'); t.id='boardTitle'; t.textContent=val('title'); board.appendChild(t);
+  items.forEach(it=>{
+    const c=document.createElement('div'); c.className='vcard';
+    const amt = it.amount ? `<div class="amt">${esc(it.amount)}<small>${esc(unit)}</small></div>` : '';
+    const note = it.note ? `<div class="note">${esc(it.note)}</div>` : '';
+    c.innerHTML=`<div class="emoji">${it.emoji||'🛡️'}</div><div class="nm">${esc(it.name||'담보명')}</div>${amt}${note}`;
+    board.appendChild(c);
+  });
+  save();
+}
+
+/* 담보표(.json) 불러오기 → 카드로 */
+function importSheet(file){
+  if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ try{
+      sheet=JSON.parse(fr.result);
+      const sel=document.getElementById('amtCol'); sel.innerHTML='';
+      sheet.head.forEach((h,i)=>{ if(i===0) return; const o=document.createElement('option'); o.value=i; o.textContent=h||('열'+i); sel.appendChild(o); });
+      sel.value = sheet.head.length-1;     // 기본: 마지막 열을 금액으로
+      document.getElementById('colPick').style.display='';
+      remapFromSheet();
+    }catch(e){ alert('JSON 파일을 읽을 수 없습니다.'); } };
+  fr.readAsText(file);
+}
+function remapFromSheet(){
+  if(!sheet) return;
+  const ac=+document.getElementById('amtCol').value;
+  items = sheet.rows.filter(r=>!r.hidden && (r.cells[0]||'').trim())
+    .map(r=>({name:r.cells[0], amount:r.cells[ac]||'', note:'', emoji:emojiFor(r.cells[0])}));
+  renderEditor(); render();
+}
+
+function loadSample(){
+  items=[
+    {name:'암진단비', amount:'5,000', note:'최초 1회 지급'},
+    {name:'암수술비', amount:'1,000', note:'수술 1회당'},
+    {name:'뇌혈관질환 진단비', amount:'2,000', note:''},
+    {name:'허혈성심장질환 진단비', amount:'2,000', note:''},
+    {name:'질병입원일당', amount:'3', note:'1일당 (3만원)'},
+    {name:'통증완화치료', amount:'50', note:'연 1회'}
+  ].map(x=>({...x, emoji:emojiFor(x.name)}));
+  renderEditor(); render();
+}
+
+function saveImage(){
+  if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
+  html2canvas(document.getElementById('board'), {scale:2, backgroundColor:null}).then(c=>{
+    const a=document.createElement('a'); a.download='보장요약카드.png'; a.href=c.toDataURL('image/png'); a.click();
+  });
+}
+function clearAll(){ if(!confirm('카드를 모두 비울까요?')) return; items=[]; sheet=null; document.getElementById('colPick').style.display='none'; renderEditor(); render(); }
+
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function val(id){ return document.getElementById(id).value; }
+function save(){ localStorage.setItem(LS, JSON.stringify(items)); }
+
+window.addEventListener('DOMContentLoaded', ()=>{
+  try{ const s=localStorage.getItem(LS); if(s) items=JSON.parse(s); }catch(e){}
+  if(items.length===0) loadSample(); else { renderEditor(); render(); }
+});
+</script>
+</body>
+</html>

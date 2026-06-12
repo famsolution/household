@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보험 영업 도구 모음</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{--blue:#3182f6; --ink:#191f28; --sub:#8b95a1;}
+  body{margin:0; padding:40px 24px; font-family:'Pretendard',sans-serif; background:#f2f4f6; color:var(--ink);}
+  .wrap{max-width:880px; margin:0 auto;}
+  h1{font-size:26px; margin:0 0 6px;}
+  .desc{color:var(--sub); margin:0 0 28px;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px;}
+  a.tool{display:block; background:#fff; border-radius:18px; padding:24px; text-decoration:none; color:inherit;
+    box-shadow:0 6px 20px rgba(0,0,0,.05); border:1px solid #f0f2f4; transition:.15s;}
+  a.tool:hover{transform:translateY(-3px); box-shadow:0 12px 28px rgba(49,130,246,.12);}
+  a.tool.soon{opacity:.55; pointer-events:none;}
+  .ic{font-size:30px;}
+  .tn{font-weight:800; font-size:17px; margin:10px 0 6px;}
+  .td{font-size:13px; color:var(--sub); line-height:1.5;}
+  .badge{display:inline-block; font-size:11px; font-weight:700; color:var(--blue); background:#e8f3ff; padding:2px 8px; border-radius:999px; margin-top:10px;}
+  .badge.soon{color:#8b95a1; background:#eef1f4;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>보험 영업 도구 모음 🧰</h1>
+  <p class="desc">대면 미팅·미러링에서 바로 쓰는 도구들. 모두 단일 파일이라 다운로드해 로컬/미러링 기기에서 사용할 수 있어요.</p>
+  <div class="grid">
+    <a class="tool" href="collateral_table.html">
+      <div class="ic">🛡️</div>
+      <div class="tn">담보표 + 발표 모드</div>
+      <div class="td">엑셀처럼 입력·시트 저장, 원하는 담보만 펼치기, 형광펜·말풍선·연결선 발표, 이미지 저장.</div>
+      <span class="badge">사용 가능</span>
+    </a>
+    <a class="tool" href="summary_cards.html">
+      <div class="ic">🪪</div>
+      <div class="tn">보장 요약 카드</div>
+      <div class="td">담보표(.json)를 불러와 고객용 보장 요약 카드로 변환하고 이미지로 저장.</div>
+      <span class="badge">사용 가능</span>
+    </a>
+    <a class="tool" href="compare.html">
+      <div class="ic">⚖️</div>
+      <div class="tn">상품 비교표</div>
+      <div class="td">2~3개 상품을 나란히 놓고 담보·금액 차이를 자동 강조. 담보표(.json)를 상품 열로 불러오면 담보명 자동 정렬.</div>
+      <span class="badge">사용 가능</span>
+    </a>
+    <a class="tool" href="calculator.html">
+      <div class="ic">🧮</div>
+      <div class="tn">보장 합계 계산기</div>
+      <div class="td">선택한 담보의 가입금액·보험료 합계를 즉시 계산하고 결과를 이미지로 저장.</div>
+      <span class="badge">사용 가능</span>
+    </a>
+    <a class="tool" href="scenario.html">
+      <div class="ic">🧩</div>
+      <div class="tn">보장 시나리오 시뮬레이터</div>
+      <div class="td">특정 상황(예: 암 진단)에서 함께 지급되는 담보를 체크하면 합산 보험금을 즉시 계산·이미지 저장.</div>
+      <span class="badge">사용 가능</span>
+    </a>
+  </div>
+</div>
+</body>
+</html>

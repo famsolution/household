@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보장 시나리오 시뮬레이터</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{--blue:#3182f6; --ink:#191f28; --sub:#8b95a1; --line:#e5e8eb;}
+  *{box-sizing:border-box;}
+  body{margin:0; padding:24px; font-family:'Pretendard',sans-serif; background:#f2f4f6; color:var(--ink);}
+  h1{font-size:22px; margin:0 0 4px;}
+  .desc{color:var(--sub); font-size:13px; margin:0 0 20px;}
+  .card{background:#fff; border-radius:18px; padding:18px 20px; box-shadow:0 6px 20px rgba(0,0,0,.04); margin-bottom:16px;}
+  .card h2{font-size:15px; margin:0 0 12px;}
+  button{font-family:inherit; cursor:pointer; border:none; border-radius:12px; padding:10px 16px; font-size:14px; font-weight:600;}
+  .btn-primary{background:var(--blue); color:#fff;} .btn-ghost{background:#eef2f7; color:#4e5968;} .btn-danger{background:#fff0f0; color:#e54848;}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  input[type=text], select{font-family:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; font-size:13px; background:#fff; color:var(--ink);}
+  table{border-collapse:collapse; width:100%;}
+  th,td{border-bottom:1px solid #eef1f4; padding:10px 8px; font-size:14px; text-align:right;}
+  th{color:var(--sub); font-size:12px; font-weight:700;}
+  td.nm, th.nm{text-align:left;} td.nm{font-weight:600;}
+  td.sub{color:var(--blue); font-weight:800;}
+  tr.off{opacity:.38;}
+  .chk{width:18px; height:18px; accent-color:var(--blue); cursor:pointer;}
+  .cnt{width:64px; text-align:right;}
+  .opt{display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--sub);}
+  .opts{display:flex; flex-wrap:wrap; gap:16px; align-items:center;}
+  /* 결과 */
+  #result{background:linear-gradient(135deg,#0ea5e9,#3182f6); color:#fff; border-radius:20px; padding:30px;}
+  #result .sc{font-size:18px; font-weight:800; opacity:.95;}
+  #result .rt{font-size:14px; opacity:.85; margin-top:14px;}
+  #result .big{font-size:44px; font-weight:900; letter-spacing:-1px; margin:2px 0 4px;}
+  #result .expr{font-size:17px; font-weight:700; opacity:.95; margin-top:8px; line-height:1.6; word-break:keep-all;}
+  #result .list{margin-top:18px; border-top:1px solid rgba(255,255,255,.25); padding-top:14px; font-size:14px; line-height:1.9;}
+  .nav{font-size:13px; margin-bottom:8px;} .nav a{color:var(--blue); text-decoration:none; font-weight:700;}
+</style>
+</head>
+<body>
+<div class="nav"><a href="tools.html">🧰 도구 모음</a> · <a href="collateral_table.html">🛡️ 담보표</a></div>
+<h1>보장 시나리오 시뮬레이터 🧩</h1>
+<p class="desc">특정 상황에서 어떤 담보들이 함께 지급되는지 선택하면, 합산 보험금이 얼마인지 한눈에 보여줍니다. (예: 암 진단 시 → 암진단비 + 수술비 + 입원일당)</p>
+
+<div class="card">
+  <h2>① 담보 불러오기 / 설정</h2>
+  <div class="toolbar">
+    <button class="btn-ghost" onclick="document.getElementById('jsonFile').click()">📥 담보표(.json) 불러오기</button>
+    <input type="file" id="jsonFile" accept=".json" style="display:none" onchange="importSheet(this.files[0])">
+    <button class="btn-ghost" onclick="addItem()">➕ 담보 직접 추가</button>
+    <button class="btn-ghost" onclick="loadSample()">예시 불러오기</button>
+  </div>
+  <div class="opts" style="margin-top:12px;">
+    <div class="opt">상황(시나리오) 이름<input type="text" id="scenario" value="암 진단 시" oninput="render()" style="width:200px;"></div>
+    <div class="opt" id="colPick" style="display:none;">지급금액 열<select id="amtCol" onchange="remap()"></select></div>
+    <div class="opt">금액 단위<input type="text" id="unit" value="만원" oninput="render()" style="width:70px;"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>② 이 상황에서 지급되는 담보 체크 (횟수·일수 입력)</h2>
+  <table>
+    <thead><tr><th style="width:34px"></th><th class="nm">담보명</th><th>지급금액</th><th>×</th><th>횟수/일</th><th>소계</th><th style="width:34px"></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p style="font-size:12px; color:var(--sub); margin:10px 0 0;">예) 입원일당은 횟수에 "입원 일수"를 넣으면 자동으로 일수만큼 합산됩니다.</p>
+</div>
+
+<div class="card">
+  <h2>③ 합산 보험금 결과</h2>
+  <div id="result"></div>
+  <div class="toolbar" style="margin-top:16px;">
+    <button class="btn-primary" onclick="saveImage()">💾 결과 이미지 저장</button>
+    <button class="btn-danger" onclick="clearAll()">♻️ 비우기</button>
+  </div>
+</div>
+
+<script>
+const LS='scn_items_v1', LSS='scn_name_v1';
+let items=[];   // {name, amt, cnt, on}
+let sheet=null;
+
+function parseNum(s){ const m=String(s||'').replace(/[^\d]/g,''); return m?parseInt(m,10):0; }
+function fmt(n){ return n.toLocaleString('ko-KR'); }
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function val(id){ return document.getElementById(id).value; }
+
+function addItem(name='', amt='', cnt=1){ items.push({name, amt, cnt, on:true}); renderRows(); render(); }
+
+function renderRows(){
+  const tb=document.getElementById('rows'); tb.innerHTML='';
+  const unit=val('unit');
+  items.forEach((it,i)=>{
+    const tr=document.createElement('tr'); if(!it.on) tr.className='off';
+    const sub=parseNum(it.amt)*(+it.cnt||0);
+    tr.innerHTML=`<td><input type="checkbox" class="chk" ${it.on?'checked':''}></td>
+      <td class="nm"><input type="text" value="${esc(it.name)}" style="width:100%; border:none; background:none;" placeholder="담보명"></td>
+      <td><input type="text" value="${esc(it.amt)}" style="width:80px; text-align:right; border:none; background:none;" placeholder="0"></td>
+      <td style="color:#b0b8c1">×</td>
+      <td><input type="text" class="cnt" value="${esc(it.cnt)}"></td>
+      <td class="sub">${fmt(sub)}${esc(unit)}</td>
+      <td><button class="btn-danger" style="padding:4px 8px;">✕</button></td>`;
+    const chk=tr.querySelector('.chk');
+    const ins=tr.querySelectorAll('input[type=text]'); // name, amt, cnt
+    chk.onchange=()=>{ it.on=chk.checked; render(); save(); };
+    ins[0].oninput=()=>{ it.name=ins[0].value; render(); save(); };
+    ins[1].oninput=()=>{ it.amt=ins[1].value; renderRows(); render(); save(); };
+    ins[2].oninput=()=>{ it.cnt=ins[2].value; renderRows(); render(); save(); };
+    tr.querySelector('.btn-danger').onclick=()=>{ items.splice(i,1); renderRows(); render(); save(); };
+    tb.appendChild(tr);
+  });
+}
+
+function render(){
+  const unit=val('unit'), scn=val('scenario');
+  const sel=items.filter(it=>it.on && it.name);
+  const total=sel.reduce((s,it)=>s+parseNum(it.amt)*(+it.cnt||0),0);
+  const expr = sel.map(it=>`${fmt(parseNum(it.amt)*(+it.cnt||0))}`).join(' + ');
+  const list = sel.map(it=>{
+    const c=+it.cnt||0; const sub=parseNum(it.amt)*c;
+    return `· ${esc(it.name)} ${fmt(parseNum(it.amt))}${esc(unit)}${c!==1?` × ${c}`:''} = <b>${fmt(sub)}${esc(unit)}</b>`;
+  }).join('<br>');
+  document.getElementById('result').innerHTML=`
+    <div class="sc">📌 ${esc(scn||'시나리오')}</div>
+    <div class="rt">함께 지급되는 담보 ${sel.length}건 · 총 합산 보험금</div>
+    <div class="big">${fmt(total)} ${esc(unit)}</div>
+    ${sel.length>1?`<div class="expr">${expr} = ${fmt(total)}${esc(unit)}</div>`:''}
+    ${list?`<div class="list">${list}</div>`:''}`;
+  save();
+}
+
+function importSheet(file){
+  if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ try{
+    sheet=JSON.parse(fr.result);
+    const sel=document.getElementById('amtCol'); sel.innerHTML='';
+    sheet.head.forEach((h,i)=>{ if(i===0)return; const o=document.createElement('option'); o.value=i; o.textContent=h||('열'+i); sel.appendChild(o); });
+    sel.value=sheet.head.length-1;
+    document.getElementById('colPick').style.display='';
+    remap();
+  }catch(e){ alert('JSON을 읽을 수 없습니다.'); } };
+  fr.readAsText(file);
+}
+function remap(){
+  if(!sheet) return; const ac=+val('amtCol');
+  items=sheet.rows.filter(r=>!r.hidden && (r.cells[0]||'').trim())
+    .map(r=>({name:r.cells[0], amt:r.cells[ac]||'', cnt:1, on:false}));   // 불러온 뒤 필요한 담보만 체크
+  renderRows(); render();
+}
+function loadSample(){
+  items=[{name:'암진단비',amt:'5,000',cnt:1,on:true},
+         {name:'암수술비(회당)',amt:'1,000',cnt:1,on:true},
+         {name:'질병입원일당(1일)',amt:'3',cnt:20,on:true},
+         {name:'통증완화치료',amt:'50',cnt:1,on:false}];
+  renderRows(); render();
+}
+function saveImage(){
+  if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다.'); return; }
+  html2canvas(document.getElementById('result'),{scale:2}).then(c=>{
+    const a=document.createElement('a'); a.download='보장시나리오.png'; a.href=c.toDataURL('image/png'); a.click();
+  });
+}
+function clearAll(){ if(!confirm('비울까요?'))return; items=[]; sheet=null; document.getElementById('colPick').style.display='none'; renderRows(); render(); }
+function save(){ localStorage.setItem(LS, JSON.stringify(items)); localStorage.setItem(LSS, val('scenario')); }
+
+window.addEventListener('DOMContentLoaded',()=>{
+  try{ const s=localStorage.getItem(LS); if(s) items=JSON.parse(s);
+       const n=localStorage.getItem(LSS); if(n) document.getElementById('scenario').value=n; }catch(e){}
+  if(items.length===0) loadSample(); else { renderRows(); render(); }
+});
+</script>
+</body>
+</html>
