@@ -98,6 +98,14 @@
   [contenteditable]{outline:none;}
   [contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--blue);}
   tr.hidden-row{display:none;}
+
+  /* 칩에 마우스를 올리면 해당 담보/열을 표에서 강조 */
+  tr.row-flash td{background:#fff4d6 !important;}
+  td.col-flash, th.col-flash{background:#fff4d6 !important; color:#191f28 !important;}
+  /* 삭제되는 행/열은 빨갛게 표시되며 사라짐 */
+  tr.removing{transition:opacity .22s ease; opacity:0;}
+  tr.removing td{background:#ffd5d5 !important;}
+  td.col-removing, th.col-removing{transition:opacity .22s ease; opacity:0; background:#ffd5d5 !important;}
 </style>
 </head>
 <body>
@@ -240,7 +248,10 @@ function refreshControls(){
       tr.classList.toggle('hidden-row', !e.target.checked);
       chip.classList.toggle('off', !e.target.checked);
     };
-    chip.querySelector('.x').onclick = ()=>{ tr.remove(); refreshControls(); };
+    // 칩에 마우스를 올리면 표에서 어떤 담보인지 바로 보이게 강조
+    chip.onmouseenter = ()=> tr.classList.add('row-flash');
+    chip.onmouseleave = ()=> tr.classList.remove('row-flash');
+    chip.querySelector('.x').onclick = ()=> deleteRow(tr);   // 참조 기반 삭제 → 정확히 그 담보만 제거
     rowBox.appendChild(chip);
   });
 
@@ -257,7 +268,9 @@ function refreshControls(){
       chip.classList.toggle('off', !e.target.checked);
       applyColVisibility();
     };
-    chip.querySelector('.x').onclick = ()=>{ deleteCol(i); };
+    chip.onmouseenter = ()=> flashCol(i, true);
+    chip.onmouseleave = ()=> flashCol(i, false);
+    chip.querySelector('.x').onclick = ()=> deleteCol(i);
     colBox.appendChild(chip);
   });
 }
@@ -285,11 +298,26 @@ function addCol(){
   colHidden.push(false);
   refreshControls(); applyColVisibility();
 }
+function deleteRow(tr){
+  // 클릭한 그 행(객체)을 빨갛게 표시 후 제거 — 인덱스를 쓰지 않으므로 항상 정확히 그 담보만 삭제됨
+  tr.classList.add('removing');
+  setTimeout(()=>{ tr.remove(); refreshControls(); }, 220);
+}
+function flashCol(i, on){
+  const tbl = document.getElementById('tbl');
+  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{
+    const c = tr.cells[i]; if(c) c.classList.toggle('col-flash', on);
+  });
+}
 function deleteCol(i){
   const tbl = document.getElementById('tbl');
-  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=> tr.deleteCell(i));
-  colHidden.splice(i,1);
-  refreshControls(); applyColVisibility();
+  const cells = [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].map(tr=> tr.cells[i]).filter(Boolean);
+  cells.forEach(c=> c.classList.add('col-removing'));
+  setTimeout(()=>{
+    [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=> tr.deleteCell(i));
+    colHidden.splice(i,1);
+    refreshControls(); applyColVisibility();
+  }, 220);
 }
 
 /* ---------- 스타일 ---------- */
