@@ -106,6 +106,76 @@
   tr.removing{transition:opacity .22s ease; opacity:0;}
   tr.removing td{background:#ffd5d5 !important;}
   td.col-removing, th.col-removing{transition:opacity .22s ease; opacity:0; background:#ffd5d5 !important;}
+
+  .btn-present{background:#111827; color:#fff;}
+  .btn-present:hover{background:#1f2937;}
+
+  /* ===== 발표 모드 ===== */
+  #preso{position:fixed; inset:0; z-index:1000; display:none; overflow:auto;
+         background:var(--stageBg,#0f172a); padding:0 0 60px;}
+  #preso.on{display:block;}
+  #presoBar{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:1100;
+    display:flex; gap:6px; flex-wrap:wrap; align-items:center; max-width:96vw;
+    background:rgba(255,255,255,.96); backdrop-filter:blur(6px);
+    padding:8px; border-radius:14px; box-shadow:0 10px 34px rgba(0,0,0,.4);}
+  #presoBar button{padding:9px 12px; font-size:13px; border-radius:10px; background:#eef2f7; color:#2b3440; font-weight:600;}
+  #presoBar button.active{background:var(--blue); color:#fff; box-shadow:0 4px 10px rgba(49,130,246,.35);}
+  #presoBar .sep{width:1px; align-self:stretch; background:#dfe3e8; margin:2px;}
+  #presoBar .ci{display:flex; align-items:center; gap:4px; font-size:12px; color:#4e5968;}
+  #presoBar input[type=color]{width:30px; height:26px; border:none; border-radius:6px; padding:0; background:none; cursor:pointer;}
+  #presoBar input[type=range]{width:90px; accent-color:var(--blue);}
+  #presoHint{position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:1100;
+    color:rgba(255,255,255,.8); font-size:13px; background:rgba(0,0,0,.35); padding:8px 14px; border-radius:999px;}
+
+  #presoStage{display:inline-block; position:relative; margin:96px 56px 40px; padding-left:70px; user-select:none;}
+  #presoStage.capture .handle-row, #presoStage.capture .rhandle,
+  #presoStage.capture .corner, #presoStage.capture .rhandle-corner{visibility:hidden;}
+
+  #presoTable{border-collapse:separate; border-spacing:0; background:#fff; border-radius:14px; overflow:hidden;
+    box-shadow:0 24px 70px rgba(0,0,0,.45);}
+  #presoTable td, #presoTable th{border:1px solid var(--pCellLine,#d7dce3);
+    padding:14px 24px; font-size:var(--pFont,24px); text-align:center; white-space:nowrap;
+    position:relative; transition:opacity .35s ease, background .3s ease;}
+  #presoTable thead .head-row th{background:var(--pHeadBg,#3182f6); color:#fff; font-weight:800;}
+  #presoTable td.name-cell{font-weight:800;}
+
+  /* 드래그 핸들(표 밖 여백 느낌) */
+  #presoTable .chandle, #presoTable .rhandle, #presoTable .corner, #presoTable .rhandle-corner{
+    background:#eef1f5; color:#aab2bd; padding:6px; font-size:13px; border-color:#e2e6eb; line-height:1;}
+  #presoTable .chandle{cursor:grab; letter-spacing:2px;}
+  #presoTable .rhandle{cursor:grab; width:26px;}
+  #presoTable .chandle:hover, #presoTable .rhandle:hover{background:#dce8ff; color:var(--blue);}
+  #presoTable .chandle.sel, #presoTable .rhandle.sel{background:var(--blue); color:#fff;}
+
+  /* 형광펜 스윕 애니메이션 */
+  #presoTable td.hl::after, #presoTable th.hl::after{
+    content:''; position:absolute; inset:0; background:var(--hlColor,#ffe44d); opacity:.55;
+    mix-blend-mode:multiply; transform-origin:left center; pointer-events:none;
+    animation:sweep .45s cubic-bezier(.4,0,.2,1) forwards;}
+  @keyframes sweep{from{transform:scaleX(0)} to{transform:scaleX(1)}}
+
+  /* 집중(딤) */
+  #presoStage.dim #presoTable tbody tr.dimmed td{opacity:.16;}
+
+  /* 말풍선 */
+  .bubbleLayer{position:absolute; inset:0; pointer-events:none;}
+  .bubble{position:absolute; transform:translate(-50%,-118%); z-index:5;
+    background:var(--bubbleColor,#111827); color:#fff; padding:10px 16px; border-radius:14px;
+    font-size:calc(var(--pFont,24px) * .8); font-weight:800; white-space:nowrap; pointer-events:auto;
+    box-shadow:0 10px 26px rgba(0,0,0,.35); outline:none;
+    animation:pop .32s cubic-bezier(.2,1.4,.5,1) forwards;}
+  .bubble::after{content:''; position:absolute; left:50%; bottom:-9px; transform:translateX(-50%);
+    border:9px solid transparent; border-top-color:var(--bubbleColor,#111827);}
+  @keyframes pop{from{opacity:0; transform:translate(-50%,-98%) scale(.7)} to{opacity:1; transform:translate(-50%,-118%) scale(1)}}
+
+  /* 연결선 */
+  .connLayer{position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:4;}
+  .connLayer path{fill:none; stroke:var(--connColor,#ff5a5f); stroke-width:3.5; stroke-linecap:round;
+    stroke-dasharray:11 8; animation:flow .9s linear infinite, connin .4s ease both;}
+  .connLayer .node{fill:var(--connColor,#ff5a5f);}
+  .connLayer .nodeTxt{fill:#fff; font-size:14px; font-weight:800; text-anchor:middle; dominant-baseline:central;}
+  @keyframes flow{to{stroke-dashoffset:-38}}
+  @keyframes connin{from{opacity:0} to{opacity:1}}
 </style>
 </head>
 <body>
@@ -168,11 +238,40 @@
   <h2>④ 미리보기 (셀을 직접 클릭해 수정할 수 있어요)</h2>
   <div id="tableWrap"></div>
   <div class="toolbar" style="margin-top:16px;">
+    <button class="btn-present" onclick="enterPreso()">🎬 발표 모드 시작</button>
     <button class="btn-primary" onclick="saveImage()">💾 이미지로 저장 (PNG)</button>
     <button class="btn-ghost" onclick="copyImage()">📎 이미지 복사</button>
     <button class="btn-danger" onclick="resetAll()">♻️ 초기화</button>
   </div>
   <p class="hint">저장 시 체크 해제한 담보·열과 편집 표시선은 빠지고 깔끔한 표만 이미지가 됩니다.</p>
+</div>
+
+<!-- ===== 발표(프레젠테이션) 모드 오버레이 ===== -->
+<div id="preso">
+  <div id="presoBar">
+    <button onclick="exitPreso()">✏️ 편집으로</button>
+    <span class="sep"></span>
+    <button id="m-rowhl"   onclick="setPresoMode('rowhl')">🖍 행 강조</button>
+    <button id="m-colhl"   onclick="setPresoMode('colhl')">🖍 열 강조</button>
+    <button id="m-bubble"  onclick="setPresoMode('bubble')">💬 합계 말풍선</button>
+    <button id="m-connect" onclick="setPresoMode('connect')">🔗 담보 연결</button>
+    <span class="sep"></span>
+    <button id="m-dim" onclick="toggleDim()">🔦 집중</button>
+    <button onclick="clearEffects()">🧹 효과 지우기</button>
+    <button onclick="savePresoImage()">💾 화면 저장</button>
+    <span class="sep"></span>
+    <span class="ci">형광펜<input type="color" id="hlColor"     value="#ffe44d" oninput="applyPresoColors()"></span>
+    <span class="ci">연결선<input type="color" id="connColor"   value="#ff5a5f" oninput="applyPresoColors()"></span>
+    <span class="ci">말풍선<input type="color" id="bubbleColor" value="#111827" oninput="applyPresoColors()"></span>
+    <span class="ci">헤더<input type="color" id="pHeadBg"       value="#3182f6" oninput="applyPresoColors()"></span>
+    <span class="ci">배경<input type="color" id="stageBg"       value="#0f172a" oninput="applyPresoColors()"></span>
+    <span class="ci">크기<input type="range" id="pFont" min="14" max="42" value="24" oninput="applyPresoColors()"></span>
+  </div>
+  <div id="presoHint">왼쪽 ⋮ 핸들을 드래그하면 담보(행), 위쪽 ⋯ 핸들을 드래그하면 열에 형광펜이 켜집니다. 모드를 바꿔 말풍선·연결도 사용하세요.</div>
+  <div id="presoStage">
+    <svg class="connLayer"></svg>
+    <div class="bubbleLayer"></div>
+  </div>
 </div>
 
 <script>
@@ -394,6 +493,266 @@ document.addEventListener('paste', e=>{
     document.getElementById('pasteArea').value = t;
   }
 });
+
+/* ==========================================================
+   🎬 발표(프레젠테이션) 모드
+   ========================================================== */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false };
+
+/* 현재 편집표에서 "보이는" 담보/열만 추려서 발표용 격자 생성 */
+function getVisibleGrid(){
+  const tbl = document.getElementById('tbl');
+  const cols = [...tbl.tHead.rows[0].cells].map((_,i)=>i).filter(i=>!colHidden[i]);
+  const head = cols.map(i=> tbl.tHead.rows[0].cells[i].textContent.trim());
+  const rows = [...tbl.tBodies[0].rows]
+    .filter(tr=> !tr.classList.contains('hidden-row'))
+    .map(tr=> cols.map(i=> tr.cells[i].textContent.trim()));
+  return { head, rows };
+}
+
+function buildPresoTable(grid){
+  const tbl = document.createElement('table'); tbl.id = 'presoTable';
+  const thead = document.createElement('thead');
+
+  // 상단 드래그 핸들 줄
+  const hr = document.createElement('tr'); hr.className = 'handle-row';
+  hr.appendChild(el('th','corner'));
+  grid.head.forEach((_,c)=>{ const h=el('th','chandle','⋯'); h.dataset.col=c; hr.appendChild(h); });
+  thead.appendChild(hr);
+
+  // 실제 헤더 줄
+  const headr = document.createElement('tr'); headr.className = 'head-row';
+  headr.appendChild(el('th','rhandle-corner'));
+  grid.head.forEach((t,c)=>{ const th=el('th',null,t); th.dataset.col=c; headr.appendChild(th); });
+  thead.appendChild(headr);
+  tbl.appendChild(thead);
+
+  // 본문
+  const tbody = document.createElement('tbody');
+  grid.rows.forEach((row,r)=>{
+    const tr = document.createElement('tr'); tr.dataset.row=r;
+    const rh = el('td','rhandle','⋮'); rh.dataset.row=r; tr.appendChild(rh);
+    row.forEach((v,c)=>{
+      const td = el('td', c===0?'name-cell':null, v);
+      td.dataset.row=r; td.dataset.col=c; tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  return tbl;
+}
+function el(tag, cls, txt){ const e=document.createElement(tag); if(cls) e.className=cls; if(txt!=null) e.textContent=txt; return e; }
+
+function enterPreso(){
+  const tbl = document.getElementById('tbl');
+  if(!tbl){ alert('먼저 표를 만들어 주세요.'); return; }
+  const grid = getVisibleGrid();
+  if(grid.rows.length===0){ alert('표시할 담보가 없습니다.'); return; }
+
+  const stage = document.getElementById('presoStage');
+  stage.querySelector('#presoTable')?.remove();
+  const newTbl = buildPresoTable(grid);
+  stage.insertBefore(newTbl, stage.firstChild);
+
+  preso.rowHL.clear(); preso.colHL.clear(); preso.chain=[]; preso.bubbles.clear(); preso.dim=false;
+  stage.classList.remove('dim');
+  stage.querySelector('.bubbleLayer').innerHTML='';
+  document.querySelector('.connLayer').innerHTML='';
+  document.getElementById('m-dim').classList.remove('active');
+
+  bindPresoEvents(newTbl);
+  setPresoMode('rowhl');
+  applyPresoColors();
+  document.getElementById('preso').classList.add('on');
+}
+function exitPreso(){ document.getElementById('preso').classList.remove('on'); }
+
+function setPresoMode(m){
+  preso.mode = m;
+  ['rowhl','colhl','bubble','connect'].forEach(k=>
+    document.getElementById('m-'+k).classList.toggle('active', k===m));
+}
+
+/* ---------- 좌표/조회 유틸 ---------- */
+function rowOf(cell){ return cell && cell.dataset.row!==undefined ? +cell.dataset.row : null; }
+function colOf(cell){ return cell && cell.dataset.col!==undefined ? +cell.dataset.col : null; }
+function getCell(r,c){ return document.querySelector(`#presoTable td[data-row="${r}"][data-col="${c}"]`); }
+
+/* ---------- 이벤트 ---------- */
+function bindPresoEvents(tbl){
+  tbl.addEventListener('pointerdown', presoDown);
+  tbl.addEventListener('pointerover', presoOver);
+  tbl.addEventListener('click', presoClick);
+}
+window.addEventListener('pointerup', ()=>{ preso.painting=null; });
+window.addEventListener('resize', ()=>{ if(document.getElementById('preso').classList.contains('on')) repositionAll(); });
+
+function presoDown(e){
+  const cell = e.target.closest('td,th'); if(!cell) return;
+  if(preso.mode==='rowhl'){
+    const r = rowOf(cell); if(r==null) return;
+    const val = !preso.rowHL.has(r);
+    preso.painting = {type:'row', val};
+    setRowHL(r, val); e.preventDefault();
+  } else if(preso.mode==='colhl'){
+    const c = colOf(cell); if(c==null) return;
+    const val = !preso.colHL.has(c);
+    preso.painting = {type:'col', val};
+    setColHL(c, val); e.preventDefault();
+  }
+}
+function presoOver(e){
+  if(!preso.painting) return;
+  const cell = e.target.closest('td,th'); if(!cell) return;
+  if(preso.painting.type==='row'){ const r=rowOf(cell); if(r!=null) setRowHL(r, preso.painting.val); }
+  else { const c=colOf(cell); if(c!=null) setColHL(c, preso.painting.val); }
+}
+function presoClick(e){
+  const cell = e.target.closest('td[data-col]'); if(!cell) return;
+  const r = rowOf(cell), c = colOf(cell);
+  if(preso.mode==='bubble'){ if(r!=null && c!=null) toggleBubble(r,c); }
+  else if(preso.mode==='connect'){ if(r!=null) toggleChain(r); }
+}
+
+/* ---------- 형광펜 ---------- */
+function setRowHL(r,val){ val?preso.rowHL.add(r):preso.rowHL.delete(r); applyHL(); applyDim(); }
+function setColHL(c,val){ val?preso.colHL.add(c):preso.colHL.delete(c); applyHL(); }
+function applyHL(){
+  const tbl = document.getElementById('presoTable'); if(!tbl) return;
+  tbl.querySelectorAll('td[data-col], th[data-col]:not(.chandle)').forEach(cell=>{
+    const r=cell.dataset.row, c=cell.dataset.col;
+    const on = (r!==undefined && preso.rowHL.has(+r)) || (c!==undefined && preso.colHL.has(+c));
+    cell.classList.toggle('hl', on);
+  });
+  tbl.querySelectorAll('.rhandle').forEach(h=> h.classList.toggle('sel', preso.rowHL.has(+h.dataset.row)));
+  tbl.querySelectorAll('.chandle').forEach(h=> h.classList.toggle('sel', preso.colHL.has(+h.dataset.col)));
+}
+
+/* ---------- 집중(딤) ---------- */
+function toggleDim(){
+  preso.dim = !preso.dim;
+  document.getElementById('m-dim').classList.toggle('active', preso.dim);
+  applyDim();
+}
+function applyDim(){
+  const stage = document.getElementById('presoStage');
+  const tbl = document.getElementById('presoTable'); if(!tbl) return;
+  const active = preso.dim && preso.rowHL.size>0;
+  stage.classList.toggle('dim', active);
+  [...tbl.tBodies[0].rows].forEach(tr=>
+    tr.classList.toggle('dimmed', active && !preso.rowHL.has(+tr.dataset.row)));
+}
+
+/* ---------- 합계 말풍선 ---------- */
+function parseNum(s){ const m=String(s).replace(/[^\d]/g,''); return m ? parseInt(m,10) : null; }
+function fmt(n){ return n.toLocaleString('ko-KR'); }
+function columnSum(c){
+  const tbl = document.getElementById('presoTable'); let s=0;
+  const onlyHL = preso.rowHL.size>0;
+  [...tbl.tBodies[0].rows].forEach(tr=>{
+    const r=+tr.dataset.row;
+    if(onlyHL && !preso.rowHL.has(r)) return;
+    const cell = tr.querySelector(`td[data-col="${c}"]`);
+    const n = parseNum(cell.textContent); if(n!=null) s+=n;
+  });
+  return s;
+}
+function toggleBubble(r,c){
+  const key = r+'-'+c;
+  if(preso.bubbles.has(key)){ preso.bubbles.get(key).remove(); preso.bubbles.delete(key); return; }
+  const sum = columnSum(c);
+  const scope = preso.rowHL.size>0 ? `강조 ${preso.rowHL.size}건` : '전체';
+  const b = document.createElement('div'); b.className='bubble'; b.contentEditable=true;
+  b.textContent = `합계(${scope}) ${fmt(sum)}원`;
+  document.querySelector('.bubbleLayer').appendChild(b);
+  preso.bubbles.set(key, b);
+  positionBubble(key);
+}
+function positionBubble(key){
+  const [r,c] = key.split('-').map(Number);
+  const b = preso.bubbles.get(key); const cell = getCell(r,c); if(!b||!cell) return;
+  const stage = document.getElementById('presoStage');
+  const cr = cell.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  b.style.left = (cr.left - sr.left + cr.width/2) + 'px';
+  b.style.top  = (cr.top  - sr.top) + 'px';
+}
+
+/* ---------- 담보 연결선 ---------- */
+function toggleChain(r){
+  const i = preso.chain.indexOf(r);
+  if(i>=0) preso.chain.splice(i,1); else preso.chain.push(r);
+  drawConnections();
+}
+function drawConnections(){
+  const svg = document.querySelector('.connLayer');
+  const stage = document.getElementById('presoStage');
+  svg.setAttribute('width', stage.offsetWidth);
+  svg.setAttribute('height', stage.offsetHeight);
+  svg.innerHTML = '';
+  const sr = stage.getBoundingClientRect();
+  // 담보명(첫 열) 왼쪽 가장자리를 기준점으로 → 연결선이 왼쪽 여백으로 휘어 데이터와 겹치지 않음
+  const pts = preso.chain.map(r=>{
+    const cell = getCell(r,0); const cr = cell.getBoundingClientRect();
+    return { x: cr.left - sr.left, y: cr.top - sr.top + cr.height/2 };
+  });
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], b=pts[i+1];
+    const dx = Math.max(50, Math.abs(b.y-a.y)*0.45);
+    const path = document.createElementNS(SVGNS,'path');
+    path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x-dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`);
+    svg.appendChild(path);
+  }
+  pts.forEach((pt,idx)=>{
+    const ci = document.createElementNS(SVGNS,'circle');
+    ci.setAttribute('cx',pt.x); ci.setAttribute('cy',pt.y); ci.setAttribute('r',14); ci.setAttribute('class','node');
+    svg.appendChild(ci);
+    const tx = document.createElementNS(SVGNS,'text');
+    tx.setAttribute('x',pt.x); tx.setAttribute('y',pt.y); tx.setAttribute('class','nodeTxt');
+    tx.textContent = idx+1; svg.appendChild(tx);
+  });
+}
+
+function repositionAll(){
+  preso.bubbles.forEach((b,k)=> positionBubble(k));
+  drawConnections();
+}
+
+/* ---------- 색상/크기 커스텀 ---------- */
+function applyPresoColors(){
+  const R = document.documentElement.style, g = id=>document.getElementById(id).value;
+  R.setProperty('--hlColor',     g('hlColor'));
+  R.setProperty('--connColor',   g('connColor'));
+  R.setProperty('--bubbleColor', g('bubbleColor'));
+  R.setProperty('--pHeadBg',     g('pHeadBg'));
+  R.setProperty('--stageBg',     g('stageBg'));
+  R.setProperty('--pFont',       document.getElementById('pFont').value + 'px');
+  repositionAll();
+}
+
+/* ---------- 효과 지우기 ---------- */
+function clearEffects(){
+  preso.rowHL.clear(); preso.colHL.clear(); preso.chain=[];
+  preso.bubbles.forEach(b=> b.remove()); preso.bubbles.clear();
+  applyHL(); applyDim(); drawConnections();
+}
+
+/* ---------- 발표 화면 이미지 저장 ---------- */
+function savePresoImage(){
+  if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
+  const stage = document.getElementById('presoStage');
+  stage.classList.add('capture');   // 드래그 핸들 숨김
+  html2canvas(stage, {scale:2, backgroundColor:getComputedStyle(document.getElementById('preso')).backgroundColor})
+    .then(canvas=>{
+      stage.classList.remove('capture');
+      const a=document.createElement('a'); a.download='보험담보표_발표.png';
+      a.href=canvas.toDataURL('image/png'); a.click();
+    })
+    .catch(()=> stage.classList.remove('capture'));
+}
+
+/* ESC 로 발표 모드 종료 */
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') exitPreso(); });
 </script>
 </body>
 </html>
