@@ -181,23 +181,53 @@
 <body>
 
 <h1>보험 담보표 만들기 🛡️</h1>
-<p class="desc">엑셀에서 복사한 보장내역을 붙여넣고 · 필요한 담보만 남기고 · 이미지로 저장하세요.</p>
+<p class="desc">엑셀처럼 직접 입력하거나 붙여넣고 · 시트로 저장하고 · 원하는 담보만 펼쳐 · 발표하거나 이미지로 저장하세요.</p>
 
-<!-- 1. 붙여넣기 -->
+<!-- 1. 입력 -->
 <div class="card">
-  <h2>① 엑셀에서 복사해 붙여넣기</h2>
-  <textarea id="pasteArea" placeholder="엑셀 셀 범위를 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V) 하세요.&#10;예) 담보명 ▸ 가입금액 ▸ 보험기간 ... 이 한 줄씩 들어옵니다."></textarea>
-  <p class="hint">첫 번째 줄은 제목(헤더)으로, 나머지 줄은 각 담보로 인식됩니다. 셀은 탭(Tab) 단위로 나뉩니다.</p>
+  <h2>① 표 만들기 — 직접 입력 또는 붙여넣기</h2>
+  <div class="opts" style="margin-bottom:12px;">
+    <div class="opt">담보(행) 수<input type="number" id="blankRows" value="8" min="1" max="200" style="width:80px; padding:7px 10px; border:1px solid var(--line); border-radius:10px;"></div>
+    <div class="opt">열 수<input type="number" id="blankCols" value="5" min="1" max="40" style="width:80px; padding:7px 10px; border:1px solid var(--line); border-radius:10px;"></div>
+    <button class="btn-primary" onclick="newBlankSheet()" style="align-self:flex-end;">🆕 빈 시트로 시작</button>
+  </div>
+  <textarea id="pasteArea" placeholder="또는, 엑셀 셀 범위를 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V) 하세요.&#10;예) 담보명 ▸ 가입금액 ▸ 보험기간 ... 이 한 줄씩 들어옵니다."></textarea>
+  <p class="hint">빈 시트에서는 <b>Tab</b>=오른쪽 칸, <b>Enter</b>=아래 칸, <b>Alt+Enter</b>=칸 안 줄바꿈으로 엑셀처럼 빠르게 입력할 수 있어요. 셀을 클릭해 바로 수정도 됩니다.</p>
   <div class="toolbar" style="margin-top:12px;">
-    <button class="btn-primary" onclick="buildFromPaste()">📋 붙여넣기로 표 만들기</button>
+    <button class="btn-ghost" onclick="buildFromPaste()">📋 붙여넣기로 표 만들기</button>
     <button class="btn-ghost" onclick="loadSample()">예시 데이터 불러오기</button>
   </div>
 </div>
 
+<!-- 1.5 시트 저장/불러오기 -->
+<div class="card" id="sheetCard" style="display:none;">
+  <h2>💾 시트 저장 · 불러오기 (여러 담보 세트 보관)</h2>
+  <div class="opts">
+    <div class="opt">시트 이름<input type="text" id="sheetName" placeholder="예) 암통합치료비" style="width:180px; padding:8px 10px; border:1px solid var(--line); border-radius:10px;"></div>
+    <button class="btn-primary" onclick="saveSheet()">💾 이 시트 저장</button>
+    <div class="opt">저장된 시트
+      <select id="sheetSel" style="min-width:160px;"></select></div>
+    <button class="btn-ghost" onclick="loadSheet()">📂 불러오기</button>
+    <button class="btn-danger" onclick="deleteSheet()">🗑 삭제</button>
+    <span style="width:1px; background:var(--line); align-self:stretch;"></span>
+    <button class="btn-ghost" onclick="exportJSON()">📤 파일로 내보내기(.json)</button>
+    <button class="btn-ghost" onclick="document.getElementById('importFile').click()">📥 파일 불러오기</button>
+    <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importJSON(this.files[0])">
+  </div>
+  <p class="hint">저장은 이 브라우저에 보관됩니다(자동 임시저장 포함). 다른 PC·미러링 기기로 옮길 땐 "파일로 내보내기"를 쓰세요.</p>
+</div>
+
 <!-- 2. 담보/열 표시 -->
 <div class="card" id="visCard" style="display:none;">
-  <h2>② 표시할 담보 · 열 고르기</h2>
-  <div style="font-size:13px; font-weight:700; color:#4e5968; margin-bottom:8px;">담보(행) — 체크 해제하면 이미지에서 숨겨집니다</div>
+  <h2>② 표시할 담보 · 열 고르기 (발표·이미지에 나올 항목)</h2>
+  <div class="toolbar" style="margin-bottom:10px;">
+    <input type="text" id="rowSearch" placeholder="🔍 담보 검색..." oninput="filterChips()"
+           style="flex:1; min-width:160px; padding:8px 12px; border:1px solid var(--line); border-radius:10px; font-family:inherit;">
+    <button class="btn-ghost" onclick="bulkRows(true)">전체 펼치기</button>
+    <button class="btn-ghost" onclick="bulkRows(false)">전체 숨기기</button>
+    <button class="btn-ghost" onclick="invertRows()">🔄 반전</button>
+  </div>
+  <div style="font-size:13px; font-weight:700; color:#4e5968; margin-bottom:8px;">담보(행) — 체크 해제하면 발표·이미지에서 숨겨집니다</div>
   <div class="chips" id="rowChips"></div>
   <div style="font-size:13px; font-weight:700; color:#4e5968; margin:16px 0 8px;">열(가로 항목)</div>
   <div class="chips" id="colChips"></div>
@@ -324,10 +354,12 @@ function buildTable(grid){
   const wrap = document.getElementById('tableWrap');
   wrap.innerHTML = ''; wrap.appendChild(tbl);
 
+  document.getElementById('sheetCard').style.display = 'block';
   document.getElementById('visCard').style.display = 'block';
   document.getElementById('optCard').style.display = 'block';
   document.getElementById('resultCard').style.display = 'block';
   refreshControls(); applyStyle(); applyColVisibility();
+  autosave();
 }
 
 /* ---------- 표시/숨김 컨트롤 ---------- */
@@ -346,6 +378,7 @@ function refreshControls(){
     chip.querySelector('input').onchange = e=>{
       tr.classList.toggle('hidden-row', !e.target.checked);
       chip.classList.toggle('off', !e.target.checked);
+      scheduleAutosave();
     };
     // 칩에 마우스를 올리면 표에서 어떤 담보인지 바로 보이게 강조
     chip.onmouseenter = ()=> tr.classList.add('row-flash');
@@ -372,6 +405,8 @@ function refreshControls(){
     chip.querySelector('.x').onclick = ()=> deleteCol(i);
     colBox.appendChild(chip);
   });
+
+  filterChips(); scheduleAutosave();
 }
 
 function applyColVisibility(){
@@ -379,6 +414,7 @@ function applyColVisibility(){
   [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{
     [...tr.cells].forEach((cell,i)=> cell.style.display = colHidden[i] ? 'none' : '');
   });
+  scheduleAutosave();
 }
 
 /* ---------- 행/열 추가·삭제 ---------- */
@@ -436,6 +472,7 @@ function applyStyle(){
   document.getElementById('vPh').textContent=ph+'px';
   document.getElementById('vPv').textContent=pv+'px';
   document.getElementById('tbl')?.classList.toggle('wrap', document.getElementById('wrap').checked);
+  scheduleAutosave();
 }
 
 /* ---------- 이미지 저장 ---------- */
@@ -465,10 +502,11 @@ async function copyImage(){
 
 /* ---------- 기타 ---------- */
 function resetAll(){
-  if(!confirm('표를 모두 지우고 처음으로 돌아갈까요?')) return;
+  if(!confirm('현재 편집 중인 표를 비울까요? (저장한 시트는 그대로 남습니다)')) return;
   document.getElementById('pasteArea').value='';
   document.getElementById('tableWrap').innerHTML='';
-  ['visCard','optCard','resultCard'].forEach(id=> document.getElementById(id).style.display='none');
+  ['sheetCard','visCard','optCard','resultCard'].forEach(id=> document.getElementById(id).style.display='none');
+  localStorage.removeItem(LS_LAST);
 }
 function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -492,6 +530,182 @@ document.addEventListener('paste', e=>{
   if(t && t.includes('\t')){
     document.getElementById('pasteArea').value = t;
   }
+});
+
+/* ==========================================================
+   🆕 빈 시트 + 엑셀식 키보드 입력
+   ========================================================== */
+function newBlankSheet(){
+  const rows = Math.max(1, +document.getElementById('blankRows').value || 8);
+  const cols = Math.max(1, +document.getElementById('blankCols').value || 5);
+  const header = ['담보명']; for(let c=1;c<cols;c++) header.push('항목'+c);
+  const grid = [header];
+  for(let r=0;r<rows;r++) grid.push(new Array(cols).fill(''));
+  buildTable(grid);
+  // 첫 본문 셀로 포커스
+  const first = document.querySelector('#tbl tbody td');
+  if(first){ first.focus(); selectCell(first); }
+}
+
+function selectCell(el){
+  const r=document.createRange(); r.selectNodeContents(el);
+  const s=getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+function bodyRowIndex(tr){ return [...document.getElementById('tbl').tBodies[0].rows].indexOf(tr); }
+
+function navFrom(cell, dr, dc){
+  const tbl = document.getElementById('tbl'); if(!tbl) return null;
+  const inHead = cell.closest('thead') !== null;
+  const ci = cell.cellIndex;
+  const body = tbl.tBodies[0];
+  if(inHead){
+    if(dr>0) return body.rows[0] ? body.rows[0].cells[ci] : null;
+    const cells = cell.parentElement.cells;
+    return cells[ci+dc] || null;
+  }
+  const ti = bodyRowIndex(cell.parentElement);
+  if(dr!==0){
+    let ni = ti+dr;
+    if(ni<0) return tbl.tHead.rows[0].cells[ci];
+    if(ni>=body.rows.length) addRow();
+    const t = body.rows[Math.min(ni, body.rows.length-1)];
+    return t ? t.cells[ci] : null;
+  }
+  // 가로 이동(줄 넘김 포함)
+  let nc = ci+dc;
+  const ncol = cell.parentElement.cells.length;
+  if(nc>=ncol){ let ni=ti+1; if(ni>=body.rows.length) addRow(); const t=body.rows[Math.min(ni,body.rows.length-1)]; return t?t.cells[0]:null; }
+  if(nc<0){ const t=body.rows[ti-1]; return t?t.cells[t.cells.length-1]:null; }
+  return cell.parentElement.cells[nc];
+}
+function onCellKey(e){
+  const cell = e.target.closest('[contenteditable]');
+  if(!cell || !document.getElementById('tbl')?.contains(cell)) return;
+  let t=null;
+  if(e.key==='Enter' && e.altKey){ e.preventDefault(); document.execCommand('insertLineBreak'); return; }
+  if(e.key==='Enter'){ e.preventDefault(); t = navFrom(cell, e.shiftKey?-1:1, 0); }
+  else if(e.key==='Tab'){ e.preventDefault(); t = navFrom(cell, 0, e.shiftKey?-1:1); }
+  if(t){ t.focus(); selectCell(t); }
+}
+document.getElementById('tableWrap').addEventListener('keydown', onCellKey);
+document.getElementById('tableWrap').addEventListener('input', ()=>{ refreshControls(); scheduleAutosave(); });
+
+/* ==========================================================
+   🔍 검색 · 전체 펼치기/숨기기/반전
+   ========================================================== */
+function filterChips(){
+  const q = document.getElementById('rowSearch').value.trim().toLowerCase();
+  [...document.getElementById('rowChips').children].forEach(chip=>{
+    chip.style.display = chip.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function bulkRows(show){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  [...tbl.tBodies[0].rows].forEach(tr=> tr.classList.toggle('hidden-row', !show));
+  refreshControls(); filterChips(); scheduleAutosave();
+}
+function invertRows(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  [...tbl.tBodies[0].rows].forEach(tr=> tr.classList.toggle('hidden-row'));
+  refreshControls(); filterChips(); scheduleAutosave();
+}
+
+/* ==========================================================
+   💾 시트 저장 / 불러오기 (localStorage + JSON 파일)
+   ========================================================== */
+const LS_SHEETS='ct_sheets_v1', LS_LAST='ct_last_v1';
+function getStyleState(){
+  const v=id=>document.getElementById(id).value;
+  return {font:v('font'),padH:v('padH'),padV:v('padV'),align:v('align'),
+          headBg:v('headBg'),headFg:v('headFg'),cellLine:v('cellLine'),
+          wrap:document.getElementById('wrap').checked};
+}
+function setStyleState(s){
+  if(!s) return;
+  const set=(id,val)=>{ const e=document.getElementById(id); if(e) e.value=val; };
+  set('font',s.font); set('padH',s.padH); set('padV',s.padV); set('align',s.align);
+  set('headBg',s.headBg); set('headFg',s.headFg); set('cellLine',s.cellLine);
+  document.getElementById('wrap').checked=!!s.wrap;
+  applyStyle();
+}
+function serialize(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return null;
+  return {
+    head:[...tbl.tHead.rows[0].cells].map(c=>c.textContent),
+    rows:[...tbl.tBodies[0].rows].map(tr=>({
+      cells:[...tr.cells].map(c=>c.textContent),
+      hidden:tr.classList.contains('hidden-row')
+    })),
+    colHidden:[...colHidden],
+    style:getStyleState()
+  };
+}
+function deserialize(d){
+  if(!d || !d.head) return;
+  buildTable([d.head, ...d.rows.map(r=>r.cells)]);
+  const tbl=document.getElementById('tbl');
+  d.rows.forEach((r,i)=>{ if(r.hidden) tbl.tBodies[0].rows[i].classList.add('hidden-row'); });
+  colHidden = Array.isArray(d.colHidden) ? d.colHidden.slice() : colHidden;
+  setStyleState(d.style);
+  refreshControls(); applyColVisibility();
+}
+function readSheets(){ try{ return JSON.parse(localStorage.getItem(LS_SHEETS)||'{}'); }catch(e){ return {}; } }
+function refreshSheetList(){
+  const sel=document.getElementById('sheetSel'); if(!sel) return;
+  const sheets=readSheets(); const cur=sel.value;
+  sel.innerHTML='';
+  Object.keys(sheets).forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+function saveSheet(){
+  const name=document.getElementById('sheetName').value.trim();
+  if(!name){ alert('시트 이름을 입력해 주세요.'); return; }
+  const data=serialize(); if(!data){ alert('저장할 표가 없습니다.'); return; }
+  const sheets=readSheets(); sheets[name]=data;
+  localStorage.setItem(LS_SHEETS, JSON.stringify(sheets));
+  refreshSheetList(); document.getElementById('sheetSel').value=name;
+  alert(`"${name}" 시트를 저장했습니다.`);
+}
+function loadSheet(){
+  const name=document.getElementById('sheetSel').value;
+  if(!name){ alert('불러올 시트를 선택해 주세요.'); return; }
+  const sheets=readSheets();
+  if(sheets[name]){ deserialize(sheets[name]); document.getElementById('sheetName').value=name; }
+}
+function deleteSheet(){
+  const name=document.getElementById('sheetSel').value;
+  if(!name) return;
+  if(!confirm(`"${name}" 시트를 삭제할까요?`)) return;
+  const sheets=readSheets(); delete sheets[name];
+  localStorage.setItem(LS_SHEETS, JSON.stringify(sheets));
+  refreshSheetList();
+}
+function exportJSON(){
+  const data=serialize(); if(!data){ alert('내보낼 표가 없습니다.'); return; }
+  const name=(document.getElementById('sheetName').value.trim()||'담보시트');
+  const blob=new Blob([JSON.stringify({name, ...data}, null, 2)], {type:'application/json'});
+  const a=document.createElement('a'); a.download=name+'.json';
+  a.href=URL.createObjectURL(blob); a.click(); URL.revokeObjectURL(a.href);
+}
+function importJSON(file){
+  if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ try{ const d=JSON.parse(fr.result); deserialize(d); if(d.name) document.getElementById('sheetName').value=d.name; }
+    catch(e){ alert('JSON 파일을 읽을 수 없습니다.'); } };
+  fr.readAsText(file);
+}
+
+/* 자동 임시저장 / 새로고침 복원 */
+let _autosaveT=null;
+function scheduleAutosave(){ clearTimeout(_autosaveT); _autosaveT=setTimeout(autosave, 600); }
+function autosave(){ const d=serialize(); if(d) localStorage.setItem(LS_LAST, JSON.stringify(d)); }
+
+window.addEventListener('DOMContentLoaded', ()=>{
+  refreshSheetList();
+  try{
+    const last=localStorage.getItem(LS_LAST);
+    if(last){ deserialize(JSON.parse(last)); }
+  }catch(e){}
 });
 
 /* ==========================================================
