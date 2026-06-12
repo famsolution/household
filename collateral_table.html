@@ -177,13 +177,25 @@
   .connLayer .nodeTxt{fill:#fff; font-size:14px; font-weight:800; text-anchor:middle; dominant-baseline:central;}
   @keyframes flow{to{stroke-dashoffset:-38}}
   @keyframes connin{from{opacity:0} to{opacity:1}}
+
+  /* 합산 보험금 패널 */
+  #sumPanel{position:fixed; right:18px; bottom:70px; z-index:1120; width:300px; max-width:90vw;
+    background:linear-gradient(135deg,#0ea5e9,#3182f6); color:#fff; border-radius:18px;
+    padding:18px 20px 16px; box-shadow:0 18px 46px rgba(0,0,0,.45); display:none; cursor:default;}
+  #sumPanel.on{display:block;}
+  #sumPanel .pt{font-size:13px; font-weight:700; opacity:.95;}
+  #sumPanel .pbig{font-size:30px; font-weight:900; letter-spacing:-1px; margin:2px 0 4px; word-break:keep-all;}
+  #sumPanel .pexpr{font-size:13px; font-weight:700; opacity:.95; line-height:1.55; word-break:break-all;}
+  #sumPanel .plist{margin-top:12px; border-top:1px solid rgba(255,255,255,.28); padding-top:10px;
+    font-size:13px; line-height:1.8; max-height:34vh; overflow:auto;}
+  #sumPanel .pclose{position:absolute; top:10px; right:12px; cursor:pointer; font-weight:900; opacity:.85;}
+  #sumPanel .pempty{font-size:13px; opacity:.95; line-height:1.5;}
 </style>
 </head>
 <body>
 
-<div style="font-size:13px; margin-bottom:8px;"><a href="tools.html" style="color:#3182f6; text-decoration:none; font-weight:700;">🧰 도구 모음</a> · <a href="summary_cards.html" style="color:#3182f6; text-decoration:none; font-weight:700;">🪪 보장 요약 카드</a></div>
-<h1>보험 담보표 만들기 🛡️</h1>
-<p class="desc">엑셀처럼 직접 입력하거나 붙여넣고 · 시트로 저장하고 · 원하는 담보만 펼쳐 · 발표하거나 이미지로 저장하세요.</p>
+<h1>보험 담보표 + 발표 모드 🛡️</h1>
+<p class="desc">엑셀 불러오기 · 직접 입력 · 시트 저장 · 원하는 담보만 펼치기, 그리고 발표 모드에서 형광펜·연결·<b>합산 보험금</b>까지 한 곳에서 끝냅니다.</p>
 
 <!-- 1. 입력 -->
 <div class="card">
@@ -294,6 +306,9 @@
     <button id="m-bubble"  onclick="setPresoMode('bubble')">💬 합계 말풍선</button>
     <button id="m-connect" onclick="setPresoMode('connect')">🔗 담보 연결</button>
     <span class="sep"></span>
+    <button id="m-sum" onclick="toggleSumPanel()">💰 합산 보험금</button>
+    <span class="ci">금액열<select id="sumCol" onchange="refreshSum()"></select></span>
+    <span class="sep"></span>
     <button id="m-dim" onclick="toggleDim()">🔦 집중</button>
     <button onclick="clearEffects()">🧹 효과 지우기</button>
     <button onclick="savePresoImage()">💾 화면 저장</button>
@@ -310,6 +325,7 @@
     <svg class="connLayer"></svg>
     <div class="bubbleLayer"></div>
   </div>
+  <div id="sumPanel"></div>
 </div>
 
 <script>
@@ -752,7 +768,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
    🎬 발표(프레젠테이션) 모드
    ========================================================== */
 const SVGNS = 'http://www.w3.org/2000/svg';
-const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false };
+const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false };
 
 /* 현재 편집표에서 "보이는" 담보/열만 추려서 발표용 격자 생성 */
 function getVisibleGrid(){
@@ -814,6 +830,12 @@ function enterPreso(){
   stage.querySelector('.bubbleLayer').innerHTML='';
   document.querySelector('.connLayer').innerHTML='';
   document.getElementById('m-dim').classList.remove('active');
+
+  // 합산 보험금: 금액 열 목록 채우기 + 패널 초기화
+  populateSumCols(grid);
+  preso.sumOn = false;
+  document.getElementById('m-sum').classList.remove('active');
+  document.getElementById('sumPanel').classList.remove('on');
 
   bindPresoEvents(newTbl);
   setPresoMode('rowhl');
@@ -881,6 +903,7 @@ function applyHL(){
   });
   tbl.querySelectorAll('.rhandle').forEach(h=> h.classList.toggle('sel', preso.rowHL.has(+h.dataset.row)));
   tbl.querySelectorAll('.chandle').forEach(h=> h.classList.toggle('sel', preso.colHL.has(+h.dataset.col)));
+  refreshSum();   // 강조가 바뀌면 합산 보험금도 즉시 갱신
 }
 
 /* ---------- 집중(딤) ---------- */
@@ -898,9 +921,41 @@ function applyDim(){
     tr.classList.toggle('dimmed', active && !preso.rowHL.has(+tr.dataset.row)));
 }
 
-/* ---------- 합계 말풍선 ---------- */
+/* ---------- 금액 해석 (억 / 천만 / 만 / 콤마 모두 인식 → 원 단위) ---------- */
 function parseNum(s){ const m=String(s).replace(/[^\d]/g,''); return m ? parseInt(m,10) : null; }
-function fmt(n){ return n.toLocaleString('ko-KR'); }
+function fmt(n){ return Math.round(n).toLocaleString('ko-KR'); }
+function parseKRW(str){
+  let s = String(str==null?'':str).replace(/[\s,]/g,'').replace(/원.*$/,'');
+  if(!s) return null;
+  if(/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);           // 순수 숫자(예: 5000)
+  if(!/[억만천백십]/.test(s)){ const d=s.replace(/[^\d.]/g,''); return d?parseFloat(d):null; }
+  const chunkVal = (chunk)=>{                                  // "5천","1천5백","5000" 등
+    if(chunk==='') return 1;
+    if(/^\d+(\.\d+)?$/.test(chunk)) return parseFloat(chunk);
+    let v=0, cur=chunk;
+    [['천',1000],['백',100],['십',10]].forEach(([u,mul])=>{
+      const m=cur.match(new RegExp('([\\d.]*)'+u));
+      if(m){ v += (m[1]?parseFloat(m[1]):1)*mul; cur=cur.replace(m[0],''); }
+    });
+    if(cur && /^\d+(\.\d+)?$/.test(cur)) v+=parseFloat(cur);
+    return v||1;
+  };
+  let total=0, work=s;
+  const am=work.match(/^(.*?)억/); if(am){ total += chunkVal(am[1])*1e8; work=work.slice(am[0].length); }
+  const mm=work.match(/^(.*?)만/); if(mm){ total += chunkVal(mm[1])*1e4; work=work.slice(mm[0].length); }
+  if(work) total += chunkVal(work);
+  return total||null;
+}
+/* 큰 금액을 읽기 쉽게: 60,000,000 → "6,000만원", 150,000,000 → "1억 5,000만원" */
+function krwShort(n){
+  n=Math.round(n);
+  if(n>=1e8){ const eok=Math.floor(n/1e8); const man=Math.round((n%1e8)/1e4);
+    return eok+'억'+(man?' '+fmt(man)+'만':'')+'원'; }
+  if(n>=1e4 && n%1e4===0) return fmt(n/1e4)+'만원';
+  return fmt(n)+'원';
+}
+
+/* ---------- 합계 말풍선 ---------- */
 function columnSum(c){
   const tbl = document.getElementById('presoTable'); let s=0;
   const onlyHL = preso.rowHL.size>0;
@@ -908,7 +963,7 @@ function columnSum(c){
     const r=+tr.dataset.row;
     if(onlyHL && !preso.rowHL.has(r)) return;
     const cell = tr.querySelector(`td[data-col="${c}"]`);
-    const n = parseNum(cell.textContent); if(n!=null) s+=n;
+    const n = parseKRW(cell.textContent); if(n!=null) s+=n;
   });
   return s;
 }
@@ -918,10 +973,59 @@ function toggleBubble(r,c){
   const sum = columnSum(c);
   const scope = preso.rowHL.size>0 ? `강조 ${preso.rowHL.size}건` : '전체';
   const b = document.createElement('div'); b.className='bubble'; b.contentEditable=true;
-  b.textContent = `합계(${scope}) ${fmt(sum)}원`;
+  b.textContent = `합계(${scope}) ${krwShort(sum)}`;
   document.querySelector('.bubbleLayer').appendChild(b);
   preso.bubbles.set(key, b);
   positionBubble(key);
+}
+
+/* ---------- 💰 합산 보험금 (강조한 담보들을 더해 총 보험금 표시) ---------- */
+function populateSumCols(grid){
+  const sel = document.getElementById('sumCol'); if(!sel) return;
+  sel.innerHTML='';
+  grid.head.forEach((h,i)=>{ if(i===0) return;   // 0번은 담보명
+    const o=document.createElement('option'); o.value=i; o.textContent=h||('열'+i); sel.appendChild(o); });
+  // 금액으로 보이는 열 자동 선택(가입금액·보험금 우선, 없으면 마지막 열)
+  let pick=-1;
+  grid.head.forEach((h,i)=>{ if(i>0 && pick<0 && /금액|보험금|가입/.test(h)) pick=i; });
+  if(pick<0) pick = grid.head.length-1;
+  sel.value=pick;
+}
+function toggleSumPanel(){
+  preso.sumOn = !preso.sumOn;
+  document.getElementById('m-sum').classList.toggle('active', preso.sumOn);
+  if(preso.sumOn) refreshSum();
+  else document.getElementById('sumPanel').classList.remove('on');
+}
+function refreshSum(){
+  if(!preso.sumOn) return;
+  const panel = document.getElementById('sumPanel');
+  const tbl = document.getElementById('presoTable'); const sel=document.getElementById('sumCol');
+  if(!tbl || !sel){ return; }
+  panel.classList.add('on');
+  const c = +sel.value;
+  const colName = sel.options[sel.selectedIndex]?.text || '금액';
+  const all = [...tbl.tBodies[0].rows].map(tr=>+tr.dataset.row);
+  const useHL = preso.rowHL.size>0;
+  const rows = (useHL ? all.filter(r=>preso.rowHL.has(r)) : all);
+  const items = rows.map(r=>({ name:getCell(r,0)?.textContent.trim()||'담보',
+                               raw:getCell(r,c)?.textContent.trim()||'',
+                               val:parseKRW(getCell(r,c)?.textContent) }))
+                    .filter(it=>it.val!=null);
+  if(items.length===0){
+    panel.innerHTML = `<span class="pclose" onclick="toggleSumPanel()">✕</span>
+      <div class="pt">💰 합산 보험금</div>
+      <div class="pempty">왼쪽 ⋮ 핸들로 더하고 싶은 <b>담보(행)</b>를 강조하세요.<br>강조한 담보들의 <b>${escapeHtml(colName)}</b>가 자동으로 합산됩니다.</div>`;
+    return;
+  }
+  const total = items.reduce((s,it)=>s+it.val,0);
+  const expr = items.map(it=>krwShort(it.val)).join(' + ');
+  const list = items.map(it=>`· ${escapeHtml(it.name)} — <b>${krwShort(it.val)}</b>`).join('<br>');
+  panel.innerHTML = `<span class="pclose" onclick="toggleSumPanel()">✕</span>
+    <div class="pt">💰 합산 보험금 · ${escapeHtml(colName)} (${useHL?`강조 ${items.length}건`:`전체 ${items.length}건`})</div>
+    <div class="pbig">${krwShort(total)}</div>
+    ${items.length>1?`<div class="pexpr">${expr} = ${krwShort(total)}</div>`:''}
+    <div class="plist">${list}</div>`;
 }
 function positionBubble(key){
   const [r,c] = key.split('-').map(Number);
