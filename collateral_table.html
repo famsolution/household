@@ -641,6 +641,7 @@ function buildTableModel(m){
   document.getElementById('groupCard').style.display = 'block';
   document.getElementById('resultCard').style.display = 'block';
   decorateGrips(); applySelModeState(); clearSel();
+  if(m.mergeSpec) mergeSpec = m.mergeSpec.map(g=>({...g})); else captureMergeSpec();
   refreshControls(); applyStyle(); applyColVisibility();
   populateGroupRowSelects(); applyZoom();
   autosave();
@@ -734,12 +735,57 @@ function applyColVisibility(){
   [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{
     [...tr.cells].forEach((cell,i)=> cell.style.display = colHidden[i] ? 'none' : '');
   });
+  reflowHeaders();      // 감춘 열에 걸친 병합 머리글을 남은 열 위로 이동
   scheduleAutosave();
+}
+
+/* ===== 병합 머리글: 열을 감춰도 묶음 이름이 남은 열 위에 유지되도록 ===== */
+let mergeSpec=[];
+function stripGripsHTML(cell){ const cl=cell.cloneNode(true); cl.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove()); return cl.innerHTML; }
+function captureMergeSpec(){
+  const tbl=document.getElementById('tbl'); mergeSpec=[]; if(!tbl) return;
+  const rows=[tbl.tHead.rows[0], ...tbl.tBodies[0].rows];
+  rows.forEach((tr,r)=>[...tr.cells].forEach((cell,c)=>{
+    if(!cell.classList.contains('merged-hidden') && cell.colSpan>1){
+      mergeSpec.push({r,c,cs:cell.colSpan,rs:cell.rowSpan||1,html:stripGripsHTML(cell)});
+    }
+  }));
+}
+function restoreHeaders(){
+  const tbl=document.getElementById('tbl'); if(!tbl||!mergeSpec.length) return;
+  const rows=[tbl.tHead.rows[0], ...tbl.tBodies[0].rows];
+  mergeSpec.forEach(g=>{
+    const tr=rows[g.r]; if(!tr) return; const a=tr.cells[g.c]; if(!a) return;
+    a.innerHTML=g.html; a.colSpan=g.cs; a.rowSpan=g.rs; a.classList.remove('merged-hidden');
+    for(let rr=g.r; rr<g.r+g.rs; rr++) for(let cc=g.c; cc<g.c+g.cs; cc++){
+      if(rr===g.r&&cc===g.c) continue;
+      const x=rows[rr] && rows[rr].cells[cc];
+      if(x){ x.classList.add('merged-hidden'); x.colSpan=1; x.rowSpan=1; x.innerHTML=''; }
+    }
+  });
+}
+function reflowHeaders(){
+  const tbl=document.getElementById('tbl'); if(!tbl||!mergeSpec.length) return;
+  restoreHeaders();
+  const rows=[tbl.tHead.rows[0], ...tbl.tBodies[0].rows];
+  mergeSpec.forEach(g=>{
+    const tr=rows[g.r]; if(!tr) return;
+    const vcols=[]; for(let cc=g.c; cc<g.c+g.cs; cc++) if(!colHidden[cc]) vcols.push(cc);
+    if(vcols.length===0 || vcols.length===g.cs) return;   // 전부 숨김/전부 보임 → 원형 유지
+    const first=vcols[0], last=vcols[vcols.length-1];
+    const na=tr.cells[first]; if(!na) return;
+    na.innerHTML=g.html; na.colSpan=last-first+1; na.rowSpan=g.rs; na.classList.remove('merged-hidden');
+    if(first!==g.c){ const oa=tr.cells[g.c]; if(oa){ oa.classList.add('merged-hidden'); oa.colSpan=1; oa.rowSpan=1; oa.innerHTML=''; } }
+    for(let cc=first+1; cc<=last; cc++){ const x=tr.cells[cc]; if(x){ x.classList.add('merged-hidden'); x.colSpan=1; x.rowSpan=1; x.innerHTML=''; } }
+  });
+  decorateGrips();
 }
 /* 열을 감추기 전에 현재 열 너비·행 높이를 고정 → 감춰도 남은 표의 가로·세로 크기가 흔들리지 않음 */
 function freezeGeometry(){
   const tbl = document.getElementById('tbl'); if(!tbl) return;
+  // 단일 열(colspan 1) 머리셀만 너비 고정 — 전체를 덮는 병합 제목은 제외(레이아웃 깨짐 방지)
   [...tbl.tHead.rows[0].cells].forEach(th=>{
+    if(th.colSpan>1 || th.classList.contains('merged-hidden')) return;
     if(!th.style.width){ const w=th.getBoundingClientRect().width; if(w) th.style.width=Math.round(w)+'px'; }
   });
   [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{
@@ -753,20 +799,20 @@ function addRow(){
   const n = tbl.tHead.rows[0].cells.length;
   const tr = tbl.tBodies[0].insertRow();
   for(let i=0;i<n;i++) tr.appendChild(makeCell('TD',{}));
-  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
+  decorateGrips(); applySelModeState(); captureMergeSpec(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
 }
 function addCol(){
   const tbl = document.getElementById('tbl');
   tbl.tHead.rows[0].appendChild(makeCell('TH',{h:'새 열'}));
   [...tbl.tBodies[0].rows].forEach(tr=> tr.appendChild(makeCell('TD',{})));
   colHidden.push(false);
-  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
+  decorateGrips(); applySelModeState(); captureMergeSpec(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
 }
 function deleteRow(tr){
   // 클릭한 그 행(객체)을 빨갛게 표시 후 제거 — 인덱스를 쓰지 않으므로 항상 정확히 그 담보만 삭제됨
   const ri=editRows().indexOf(tr); if(ri>0) unmergeIntersectingRow(ri);
   tr.classList.add('removing');
-  setTimeout(()=>{ tr.remove(); decorateGrips(); refreshControls(); populateGroupRowSelects(); }, 220);
+  setTimeout(()=>{ tr.remove(); decorateGrips(); captureMergeSpec(); refreshControls(); reflowHeaders(); populateGroupRowSelects(); }, 220);
 }
 function flashCol(i, on){
   const tbl = document.getElementById('tbl');
@@ -782,7 +828,7 @@ function deleteCol(i){
   setTimeout(()=>{
     [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=> tr.deleteCell(i));
     colHidden.splice(i,1);
-    decorateGrips(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
+    decorateGrips(); captureMergeSpec(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
   }, 220);
 }
 
@@ -925,7 +971,7 @@ function mergeCells(){
   }
   anchor.colSpan=c2-c1+1; anchor.rowSpan=r2-r1+1;
   selCells.clear(); selCells.add(anchor); updateFmtInfo();
-  applyColVisibility(); scheduleAutosave();
+  captureMergeSpec(); applyColVisibility(); scheduleAutosave();
 }
 function unmergeCells(){
   let did=false;
@@ -933,7 +979,7 @@ function unmergeCells(){
     if(anchor.colSpan>1||anchor.rowSpan>1){ unmergeOne(anchor); did=true; }
   });
   if(!did) alert('병합된 셀(병합 후 큰 칸)을 선택한 뒤 눌러주세요.');
-  applyColVisibility(); scheduleAutosave();
+  captureMergeSpec(); applyColVisibility(); scheduleAutosave();
 }
 function unmergeOne(anchor){
   const {r,c}=cellRC(anchor), cs=anchor.colSpan, rs=anchor.rowSpan;
@@ -1202,7 +1248,8 @@ function serialize(){
       rh: tr.style.height||undefined
     })),
     colHidden:[...colHidden],
-    style:getStyleState()
+    style:getStyleState(),
+    mergeSpec: mergeSpec.map(g=>({...g}))
   };
 }
 function deserialize(d){
@@ -1212,7 +1259,7 @@ function deserialize(d){
     cells: r.cells.map(c=> typeof c==='string' ? {h:textToHtml(c)} : c),
     hidden: r.hidden, rh: r.rh
   }));
-  buildTableModel({ head, rows, colHidden: d.colHidden });
+  buildTableModel({ head, rows, colHidden: d.colHidden, mergeSpec: d.mergeSpec });
   setStyleState(d.style);
   if(d.autoPreso) setTimeout(()=>{ if(confirm('고객용(발표) 파일입니다. 바로 발표 화면으로 열까요?')) enterPreso(); }, 350);
 }
@@ -1462,15 +1509,22 @@ function onTableContextMenu(e){
   if(selCells.size && selCells.has(cell)) cols=[...new Set([...selCells].map(c=>cellRC(c).c))];
   else cols=[clicked];
   const dataCols=cols.filter(c=>c>0);
-  buildAndShowCtx(e.clientX, e.clientY, dataCols.length?dataCols:[clicked]);
+  const finalCols=dataCols.length?dataCols:[clicked];
+  const colName = cell.textContent.trim().slice(0,14);
+  buildAndShowCtx(e.clientX, e.clientY, finalCols, colName);
 }
-function buildAndShowCtx(x,y,cols){
+function buildAndShowCtx(x,y,cols,colName){
   const tbl=document.getElementById('tbl'); if(!tbl) return;
   const ncol=tbl.tHead.rows[0].cells.length;
-  let dataCount=0; for(let c=1;c<ncol;c++) dataCount++;
-  // 계층형 그룹 머리행(병합 + 묶음 2개 이상)을 직접 찾아, 클릭한 열이 속한 묶음만 대상으로
+  const dataCount=ncol-1;
+  const items=[];
+  // 1) 클릭한 "이 열" 하나만 (가장 흔한 요구)
+  const oneTag = cols.length===1 ? (colName?` (${colName})`:'') : ` (${cols.length}열)`;
+  items.push({label:`📁 이 열만 접기${oneTag}`, fn:()=>ctxCollapseCols(cols)});
+  items.push({label:`✅ 이 열만 보기${oneTag}`, fn:()=>ctxShowOnlyCols(cols)});
+  // 2) 이 열이 속한 묶음 전체
   const keys=['head']; for(let i=0;i<tbl.tBodies[0].rows.length;i++) keys.push(String(i));
-  const items=[]; const seen=new Set();
+  const seen=new Set();
   keys.forEach(key=>{
     if(!isMergedHeaderRow(key) || !isGroupRow(key)) return;   // 제목(전체덮음)·데이터·금액행 제외
     const v=effValsForRow(key);
@@ -1478,16 +1532,14 @@ function buildAndShowCtx(x,y,cols){
     if(!gvals.length) return;
     const set=new Set(gvals);
     const gcols=[]; for(let c=1;c<ncol;c++) if(set.has(v[c])) gcols.push(c);
-    if(gcols.length===0 || gcols.length>=dataCount) return;    // 전체를 덮는 묶음은 제외(전부 접힘 방지)
+    if(gcols.length<=cols.length || gcols.length>=dataCount) return;  // 단일열과 같거나 전체덮음이면 생략
     const label=gvals.join(', ');
     if(seen.has(label)) return; seen.add(label);
-    items.push({h:'묶음: '+label+` (${gcols.length}열)`});
-    items.push({label:'✅ 이 묶음만 보기', fn:()=>ctxShowOnlyCols(gcols)});
-    items.push({label:'📁 이 묶음 접기', fn:()=>ctxCollapseCols(gcols)});
     items.push('sep');
+    items.push({h:'묶음: '+label+` (${gcols.length}열)`});
+    items.push({label:'📁 이 묶음 전체 접기', fn:()=>ctxCollapseCols(gcols)});
+    items.push({label:'✅ 이 묶음만 보기', fn:()=>ctxShowOnlyCols(gcols)});
   });
-  items.push({label:'✅ 선택한 열만 보기', fn:()=>ctxShowOnlyCols(cols)});
-  items.push({label:'📁 선택한 열 접기', fn:()=>ctxCollapseCols(cols)});
   items.push('sep');
   items.push({label:'🔓 전체 펼치기(모두 보기)', fn:()=>resetGroup()});
   renderCtx(x,y,items);
