@@ -104,7 +104,7 @@
   #tbl{position:relative;}
   #tbl th, #tbl td{position:relative;}
   .merged-hidden{display:none;}
-  .wrapcol{white-space:normal !important; word-break:keep-all; overflow-wrap:anywhere;}
+  .wrapcol{white-space:normal !important; word-break:keep-all;}
   #tbl th, #tbl td{word-break:keep-all;}   /* 한글이 글자 단위로 세로로 잘리지 않도록 */
   #tbl thead th{font-weight:800;}          /* 머리글 기본 굵게 */
   #tbl tr.grp-hdr td{font-weight:800;}     /* 대분류·중분류(묶음) 머리행 기본 굵게 */
@@ -791,12 +791,18 @@ function reflowHeaders(){
 /* 열을 감추기 전에 현재 열 너비·행 높이를 고정 → 감춰도 남은 표의 가로·세로 크기가 흔들리지 않음 */
 function freezeGeometry(){
   const tbl = document.getElementById('tbl'); if(!tbl) return;
-  // 단일 열(colspan 1) 머리셀만 너비 고정 — 전체를 덮는 병합 제목은 제외(레이아웃 깨짐 방지)
-  [...tbl.tHead.rows[0].cells].forEach(th=>{
-    if(th.colSpan>1 || th.classList.contains('merged-hidden')) return;
-    if(!th.style.width){ const w=th.getBoundingClientRect().width; if(w) th.style.width=Math.round(w)+'px'; }
+  const rows=[tbl.tHead.rows[0], ...tbl.tBodies[0].rows];
+  // 각 열마다 단일 칸(colspan 1) 하나의 현재 너비를 고정 → 머리글이 전체 병합이어도 열 너비 유지
+  const done={};
+  rows.forEach(tr=>{
+    [...tr.cells].forEach((cell,i)=>{
+      if(done[i]) return;
+      if(cell.colSpan>1 || cell.classList.contains('merged-hidden') || cell.style.display==='none') return;
+      const w=cell.getBoundingClientRect().width;
+      if(w>0){ if(!cell.style.width) cell.style.width=Math.round(w)+'px'; done[i]=true; }
+    });
   });
-  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{
+  rows.forEach(tr=>{
     if(!tr.style.height){ const h=tr.getBoundingClientRect().height; if(h) tr.style.height=Math.round(h)+'px'; }
   });
 }
