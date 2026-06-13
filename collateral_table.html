@@ -122,6 +122,8 @@
     background:#f1f4f7; border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:12px;}
   .fmtbar .ci{display:flex; align-items:center; gap:5px; font-size:12px; color:#4e5968;}
   .fmtbar .vsep{width:1px; align-self:stretch; background:var(--line); margin:0 2px;}
+  .fmtbar.floating{position:fixed; top:0; left:0; right:0; z-index:1200; margin:0; border-radius:0;
+    border-left:0; border-right:0; box-shadow:0 8px 24px rgba(0,0,0,.18); max-height:42vh; overflow:auto;}
   .toolbar button.on, .fmtbar button.on{background:var(--blue); color:#fff;}
 
   /* 칩에 마우스를 올리면 해당 담보/열을 표에서 강조 */
@@ -372,6 +374,9 @@
     <button class="btn-ghost" onclick="unmergeCells()">병합 해제</button>
     <button class="btn-ghost" onclick="clearFmt()">서식 지우기</button>
     <span class="vsep"></span>
+    <button class="btn-danger" onclick="deleteSelectedRows()">🗑 행 삭제</button>
+    <button class="btn-danger" onclick="deleteSelectedCols()">🗑 열 삭제</button>
+    <span class="vsep"></span>
     <span class="ci">선 위치
       <select id="bdSide">
         <option value="all">전체</option>
@@ -387,6 +392,8 @@
       <input type="range" id="bdW" min="0" max="8" step="0.5" value="1" oninput="applyCellBorder()"></span>
     <button class="btn-ghost" onclick="applyCellBorder(true)">선 적용</button>
     <button class="btn-ghost" onclick="resetCellBorder()">선 기본값</button>
+    <span class="vsep"></span>
+    <button class="btn-ghost" onclick="toggleSelMode()">✖ 닫기</button>
     <span id="fmtInfo" class="hint" style="margin:0;"></span>
   </div>
   <div id="tableWrap"></div>
@@ -688,26 +695,24 @@ function applyColVisibility(){
 
 /* ---------- 행/열 추가·삭제 ---------- */
 function addRow(){
-  unmergeAll();
   const tbl = document.getElementById('tbl');
   const n = tbl.tHead.rows[0].cells.length;
   const tr = tbl.tBodies[0].insertRow();
   for(let i=0;i<n;i++) tr.appendChild(makeCell('TD',{}));
-  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility();
+  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
 }
 function addCol(){
-  unmergeAll();
   const tbl = document.getElementById('tbl');
   tbl.tHead.rows[0].appendChild(makeCell('TH',{h:'새 열'}));
   [...tbl.tBodies[0].rows].forEach(tr=> tr.appendChild(makeCell('TD',{})));
   colHidden.push(false);
-  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility();
+  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
 }
 function deleteRow(tr){
   // 클릭한 그 행(객체)을 빨갛게 표시 후 제거 — 인덱스를 쓰지 않으므로 항상 정확히 그 담보만 삭제됨
-  unmergeAll();
+  const ri=editRows().indexOf(tr); if(ri>0) unmergeIntersectingRow(ri);
   tr.classList.add('removing');
-  setTimeout(()=>{ tr.remove(); refreshControls(); }, 220);
+  setTimeout(()=>{ tr.remove(); decorateGrips(); refreshControls(); populateGroupRowSelects(); }, 220);
 }
 function flashCol(i, on){
   const tbl = document.getElementById('tbl');
@@ -716,14 +721,14 @@ function flashCol(i, on){
   });
 }
 function deleteCol(i){
-  unmergeAll();
+  unmergeIntersectingCol(i);
   const tbl = document.getElementById('tbl');
   const cells = [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].map(tr=> tr.cells[i]).filter(Boolean);
   cells.forEach(c=> c.classList.add('col-removing'));
   setTimeout(()=>{
     [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=> tr.deleteCell(i));
     colHidden.splice(i,1);
-    decorateGrips(); refreshControls(); applyColVisibility();
+    decorateGrips(); refreshControls(); applyColVisibility(); populateGroupRowSelects();
   }, 220);
 }
 
@@ -740,10 +745,18 @@ function cellAt(r,c){ const rows=editRows(); return rows[r] ? rows[r].cells[c] :
 function toggleSelMode(){
   selMode=!selMode;
   document.getElementById('selModeBtn').classList.toggle('on', selMode);
-  document.getElementById('fmtBar').style.display = selMode ? 'flex' : 'none';
+  const fb=document.getElementById('fmtBar');
+  fb.style.display = selMode ? 'flex' : 'none';
+  fb.classList.toggle('floating', selMode);   // 화면 어디서나 보이는 떠 있는 상단 바
   applySelModeState();
-  if(!selMode) clearSel();
+  if(selMode){ adjustFmtPad(); }
+  else { document.body.style.paddingTop=''; clearSel(); }
 }
+function adjustFmtPad(){
+  const fb=document.getElementById('fmtBar');
+  if(fb && fb.classList.contains('floating')) document.body.style.paddingTop=(fb.offsetHeight+10)+'px';
+}
+window.addEventListener('resize', adjustFmtPad);
 function applySelModeState(){
   const tbl=document.getElementById('tbl'); if(!tbl) return;
   tbl.classList.toggle('selmode', selMode);
@@ -862,6 +875,41 @@ function unmergeOne(anchor){
 }
 function unmergeAll(){
   editRows().forEach(tr=> [...tr.cells].forEach(cell=>{ if(cell.colSpan>1||cell.rowSpan>1) unmergeOne(cell); }));
+}
+/* 삭제할 줄과 겹치는 병합만 해제(나머지 병합·모든 셀 테두리는 그대로 보존) */
+function unmergeIntersectingCol(ci){
+  editRows().forEach(tr=> [...tr.cells].forEach(cell=>{
+    if(cell.classList.contains('merged-hidden')) return;
+    if(cell.colSpan>1||cell.rowSpan>1){ const {c}=cellRC(cell); if(c<=ci && ci<=c+cell.colSpan-1) unmergeOne(cell); }
+  }));
+}
+function unmergeIntersectingRow(ri){
+  editRows().forEach(tr=> [...tr.cells].forEach(cell=>{
+    if(cell.classList.contains('merged-hidden')) return;
+    if(cell.colSpan>1||cell.rowSpan>1){ const {r}=cellRC(cell); if(r<=ri && ri<=r+cell.rowSpan-1) unmergeOne(cell); }
+  }));
+}
+/* 선택한 셀이 속한 행/열 삭제 — 남는 셀들의 인라인 테두리는 100% 그대로 유지됨 */
+function deleteSelectedRows(){
+  const idx=new Set(); selCells.forEach(c=>{ const {r}=cellRC(c); if(r>0) idx.add(r); });  // r=0은 머리글
+  if(!idx.size){ alert('삭제할 본문 행의 셀을 선택하세요.'); return; }
+  if(!confirm(`선택한 ${idx.size}개 행을 삭제할까요?`)) return;
+  [...idx].sort((a,b)=>b-a).forEach(r=>{ unmergeIntersectingRow(r); const tr=editRows()[r]; if(tr) tr.remove(); });
+  clearSel(); decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility(); populateGroupRowSelects(); scheduleAutosave();
+}
+function deleteSelectedCols(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  const ncol=tbl.tHead.rows[0].cells.length;
+  const idx=new Set(); selCells.forEach(c=>{ const {c:cc}=cellRC(c); idx.add(cc); });
+  if(!idx.size){ alert('삭제할 셀을 선택하세요.'); return; }
+  if(idx.size>=ncol){ alert('표의 모든 열은 삭제할 수 없습니다.'); return; }
+  if(!confirm(`선택한 ${idx.size}개 열을 삭제할까요?`)) return;
+  [...idx].sort((a,b)=>b-a).forEach(ci=>{
+    unmergeIntersectingCol(ci);
+    editRows().forEach(tr=>{ if(tr.cells[ci]) tr.deleteCell(ci); });
+    colHidden.splice(ci,1);
+  });
+  clearSel(); decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility(); populateGroupRowSelects(); scheduleAutosave();
 }
 
 /* ---------- 스타일 ---------- */
