@@ -106,6 +106,8 @@
   .merged-hidden{display:none;}
   .wrapcol{white-space:normal !important; word-break:keep-all; overflow-wrap:anywhere;}
   #tbl th, #tbl td{word-break:keep-all;}   /* 한글이 글자 단위로 세로로 잘리지 않도록 */
+  #tbl thead th{font-weight:800;}          /* 머리글 기본 굵게 */
+  #tbl tr.grp-hdr td{font-weight:800;}     /* 대분류·중분류(묶음) 머리행 기본 굵게 */
   /* 가로/세로 표 라인 전체 감추기(셀별 인라인 테두리는 그대로 유지) */
   table.no-hlines th, table.no-hlines td{border-top-width:0; border-bottom-width:0;}
   table.no-vlines th, table.no-vlines td{border-left-width:0; border-right-width:0;}
@@ -399,6 +401,8 @@
     <button class="btn-ghost" onclick="unmergeCells()">병합 해제</button>
     <button class="btn-ghost" onclick="clearFmt()">서식 지우기</button>
     <span class="vsep"></span>
+    <button class="btn-ghost" onclick="hideSelectedCols()">🙈 선택 열 감추기</button>
+    <button class="btn-ghost" onclick="hideSelectedRows()">🙈 선택 행 감추기</button>
     <button class="btn-danger" onclick="deleteSelectedRows()">🗑 행 삭제</button>
     <button class="btn-danger" onclick="deleteSelectedCols()">🗑 열 삭제</button>
     <span class="vsep"></span>
@@ -1002,6 +1006,23 @@ function unmergeIntersectingRow(ri){
     if(cell.colSpan>1||cell.rowSpan>1){ const {r}=cellRC(cell); if(r<=ri && ri<=r+cell.rowSpan-1) unmergeOne(cell); }
   }));
 }
+/* 드래그/클릭으로 선택한 여러 열/행을 한꺼번에 감추기(삭제 아님 — 전체 펼치기로 복원) */
+function hideSelectedCols(){
+  const idx=new Set(); selCells.forEach(c=>{ const {c:cc}=cellRC(c); if(cc>0) idx.add(cc); });
+  if(!idx.size){ alert('감출 열의 셀을 드래그하거나 클릭해 선택하세요.'); return; }
+  freezeGeometry();
+  idx.forEach(c=> colHidden[c]=true);
+  applyColVisibility();
+  if(document.getElementById('autoHideEmpty')?.checked) autoHideEmptyRows();
+  clearSel(); refreshControls(); refreshGroupChips();
+}
+function hideSelectedRows(){
+  const rowsIdx=new Set(); selCells.forEach(c=>{ const {r}=cellRC(c); if(r>0) rowsIdx.add(r); });
+  if(!rowsIdx.size){ alert('감출 행의 셀을 드래그하거나 클릭해 선택하세요.'); return; }
+  const er=editRows();
+  rowsIdx.forEach(r=>{ const tr=er[r]; if(tr) tr.classList.add('hidden-row'); });
+  clearSel(); refreshControls();
+}
 /* 선택한 셀이 속한 행/열 삭제 — 남는 셀들의 인라인 테두리는 100% 그대로 유지됨 */
 function deleteSelectedRows(){
   const idx=new Set(); selCells.forEach(c=>{ const {r}=cellRC(c); if(r>0) idx.add(r); });  // r=0은 머리글
@@ -1427,7 +1448,15 @@ function refreshDaeOptions(){
   const uniq=[]; for(let c=fg;c<vals.length;c++){ if(vals[c] && !uniq.includes(vals[c])) uniq.push(vals[c]); }
   sel.innerHTML=''; uniq.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
   if(uniq.includes(keep)) sel.value=keep;
-  refreshGroupChips(); refreshJungOptions();
+  refreshGroupChips(); refreshJungOptions(); markHeaderRows();
+}
+/* 대분류·중분류 머리행을 굵게 표시(기본) */
+function markHeaderRows(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  [...tbl.tBodies[0].rows].forEach(tr=> tr.classList.remove('grp-hdr'));
+  [document.getElementById('daeRow').value, document.getElementById('jungRow').value].forEach(k=>{
+    if(k && k!=='head'){ const tr=tbl.tBodies[0].rows[+k]; if(tr) tr.classList.add('grp-hdr'); }
+  });
 }
 function refreshJungOptions(){
   const daeVals=effValsForRow(document.getElementById('daeRow').value);
@@ -1439,6 +1468,7 @@ function refreshJungOptions(){
   sel.innerHTML='<option value="">전체</option>';
   uniq.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
   if([...sel.options].some(o=>o.value===keep)) sel.value=keep;
+  markHeaderRows();
 }
 /* 대분류 묶음 칩: 체크 해제 시 그 대분류의 모든 열을 통째로 접기 */
 function refreshGroupChips(){
@@ -1506,7 +1536,7 @@ function onTableContextMenu(e){
   e.preventDefault();
   const clicked=cell.cellIndex;
   let cols;
-  if(selCells.size && selCells.has(cell)) cols=[...new Set([...selCells].map(c=>cellRC(c).c))];
+  if(selCells.size) cols=[...new Set([...selCells].map(c=>cellRC(c).c))];   // 드래그로 고른 열 전체
   else cols=[clicked];
   const dataCols=cols.filter(c=>c>0);
   const finalCols=dataCols.length?dataCols:[clicked];
