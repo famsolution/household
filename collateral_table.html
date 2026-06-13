@@ -326,8 +326,12 @@
       <input type="color" id="headFg" value="#ffffff" oninput="applyStyle()"></div></div>
     <div class="opt">테두리 색
       <input type="color" id="cellLine" value="#c9ced6" oninput="applyStyle()"></div>
-    <div class="opt">표 선 두께 <span id="vBw">1px</span> <span style="opacity:.7;">(0=투명)</span>
-      <input type="range" id="borderW" min="0" max="8" step="0.5" value="1" oninput="applyStyle()"></div>
+    <div class="opt">표 선 두께 (0=투명)
+      <div class="opt-row">
+        <input type="range" id="borderW" min="0" max="20" step="0.5" value="1" oninput="syncBW('range')">
+        <input type="number" id="borderWNum" min="0" max="20" step="0.5" value="1" oninput="syncBW('num')"
+          style="width:58px; padding:5px 7px; border:1px solid var(--line); border-radius:8px;"> px
+      </div></div>
     <div class="opt"> &nbsp;
       <label class="switch"><input type="checkbox" id="wrap" onchange="applyStyle()"> 긴 글자 줄바꿈 허용</label></div>
     <div class="opt">표 라인
@@ -402,8 +406,11 @@
         <option value="right">오른쪽</option>
       </select></span>
     <span class="ci">선색<input type="color" id="bdColor" value="#c9ced6"></span>
-    <span class="ci">선 두께 <span id="vBdW">1px</span>
-      <input type="range" id="bdW" min="0" max="8" step="0.5" value="1" oninput="applyCellBorder()"></span>
+    <span class="ci">선 두께
+      <input type="range" id="bdW" min="0" max="20" step="0.5" value="1" oninput="syncBdW('range')">
+      <input type="number" id="bdWNum" min="0" max="20" step="0.5" value="1" oninput="syncBdW('num')"
+        style="width:50px; padding:4px 6px; border:1px solid var(--line); border-radius:7px;">
+      <span id="vBdW" style="color:#e54848;"></span></span>
     <button class="btn-ghost" onclick="applyCellBorder(true)">선 적용</button>
     <button class="btn-ghost" onclick="resetCellBorder()">선 기본값</button>
     <span class="vsep"></span>
@@ -840,9 +847,22 @@ function bdSidesOf(side){
   if(side==='v')   return ['Left','Right'];
   return [{top:'Top',bottom:'Bottom',left:'Left',right:'Right'}[side]];
 }
+function syncBW(src){
+  const r=document.getElementById('borderW'), n=document.getElementById('borderWNum');
+  if(src==='num'){ let v=parseFloat(n.value); if(isNaN(v))v=0; v=Math.max(0,Math.min(20,v)); r.value=v; }
+  else { n.value=r.value; }
+  applyStyle();
+}
+function syncBdW(src){
+  const r=document.getElementById('bdW'), n=document.getElementById('bdWNum');
+  if(src==='num'){ let v=parseFloat(n.value); if(isNaN(v))v=0; v=Math.max(0,Math.min(20,v)); r.value=v; }
+  else { n.value=r.value; }
+  applyCellBorder();
+}
 function applyCellBorder(fromButton){
   const w = +document.getElementById('bdW').value;
-  document.getElementById('vBdW').textContent = w+'px'+(w===0?' (투명)':'');
+  document.getElementById('bdWNum').value = w;
+  document.getElementById('vBdW').textContent = w===0 ? '(투명)' : '';
   if(!selCells.size){ if(fromButton) alert('먼저 테두리를 바꿀 셀을 선택하세요.'); return; }
   const sides = bdSidesOf(document.getElementById('bdSide').value);
   const col = document.getElementById('bdColor').value;
@@ -947,7 +967,7 @@ function applyStyle(){
   r.setProperty('--cellLine', document.getElementById('cellLine').value);
   const bw = document.getElementById('borderW').value;
   r.setProperty('--cellBorderW', bw+'px');
-  document.getElementById('vBw').textContent = bw+'px';
+  document.getElementById('borderWNum').value = bw;
   document.getElementById('vFont').textContent=f+'px';
   document.getElementById('vPh').textContent=ph+'px';
   document.getElementById('vPv').textContent=pv+'px';
@@ -1308,11 +1328,22 @@ function populateGroupRowSelects(){
   jungR.value = (keep.jung && [...jungR.options].some(o=>o.value===keep.jung)) ? keep.jung : defJung;
   refreshDaeOptions();
 }
-/* 항목(고정) 열 다음, 실제 묶음(병합)이 시작되는 첫 열 */
+/* 서로 다른 묶음이 2개 이상인 행(=그룹 머리행) */
+function isGroupRow(key){ return new Set(effValsForRow(key).slice(1).filter(Boolean)).size >= 2; }
+/* 그 행에 병합(colspan>1)된 머리 셀이 있는가 = 계층형 그룹 행 */
+function isMergedHeaderRow(key){ return rowCellsByKey(key).some(c=>c.colSpan>1 && !c.classList.contains('merged-hidden')); }
+/* 항목(고정) 열 다음, 실제 묶음이 시작되는 첫 열 — 제목(전체덮음) 행은 제외하고 실제 그룹행 기준 */
 function firstGroupCol(){
-  const cells=rowCellsByKey(document.getElementById('daeRow').value);
-  for(let c=1;c<cells.length;c++){ if(cells[c].colSpan>1 || cells[c].classList.contains('merged-hidden')) return c; }
-  return 1;
+  let best=Infinity;
+  editRows().forEach((tr,r)=>{
+    const key = r===0 ? 'head' : String(r-1);
+    if(!(isMergedHeaderRow(key) && isGroupRow(key))) return;
+    for(let c=1;c<tr.cells.length;c++){
+      const cell=tr.cells[c];
+      if(cell.colSpan>1 || cell.classList.contains('merged-hidden')){ best=Math.min(best,c); break; }
+    }
+  });
+  return best===Infinity ? 1 : best;
 }
 function refreshDaeOptions(){
   const vals=effValsForRow(document.getElementById('daeRow').value);
@@ -1404,15 +1435,27 @@ function onTableContextMenu(e){
   buildAndShowCtx(e.clientX, e.clientY, dataCols.length?dataCols:[clicked]);
 }
 function buildAndShowCtx(x,y,cols){
-  const daeVals=effValsForRow(document.getElementById('daeRow').value);
-  const dae=[...new Set(cols.map(c=>daeVals[c]).filter(Boolean))];
-  const items=[];
-  if(dae.length){
-    items.push({h:'대분류: '+dae.join(', ')});
-    items.push({label:'✅ 이 대분류만 보기', fn:()=>ctxShowOnlyDae(dae)});
-    items.push({label:'📁 이 대분류 접기', fn:()=>ctxCollapseDae(dae)});
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  const ncol=tbl.tHead.rows[0].cells.length;
+  let dataCount=0; for(let c=1;c<ncol;c++) dataCount++;
+  // 계층형 그룹 머리행(병합 + 묶음 2개 이상)을 직접 찾아, 클릭한 열이 속한 묶음만 대상으로
+  const keys=['head']; for(let i=0;i<tbl.tBodies[0].rows.length;i++) keys.push(String(i));
+  const items=[]; const seen=new Set();
+  keys.forEach(key=>{
+    if(!isMergedHeaderRow(key) || !isGroupRow(key)) return;   // 제목(전체덮음)·데이터·금액행 제외
+    const v=effValsForRow(key);
+    const gvals=[...new Set(cols.map(c=>v[c]).filter(Boolean))];
+    if(!gvals.length) return;
+    const set=new Set(gvals);
+    const gcols=[]; for(let c=1;c<ncol;c++) if(set.has(v[c])) gcols.push(c);
+    if(gcols.length===0 || gcols.length>=dataCount) return;    // 전체를 덮는 묶음은 제외(전부 접힘 방지)
+    const label=gvals.join(', ');
+    if(seen.has(label)) return; seen.add(label);
+    items.push({h:'묶음: '+label+` (${gcols.length}열)`});
+    items.push({label:'✅ 이 묶음만 보기', fn:()=>ctxShowOnlyCols(gcols)});
+    items.push({label:'📁 이 묶음 접기', fn:()=>ctxCollapseCols(gcols)});
     items.push('sep');
-  }
+  });
   items.push({label:'✅ 선택한 열만 보기', fn:()=>ctxShowOnlyCols(cols)});
   items.push({label:'📁 선택한 열 접기', fn:()=>ctxCollapseCols(cols)});
   items.push('sep');
