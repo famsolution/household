@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>보험 담보표 만들기</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
   @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
@@ -99,6 +99,27 @@
   [contenteditable]{outline:none;}
   [contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--blue);}
   tr.hidden-row{display:none;}
+
+  /* 셀 병합 / 너비·높이 조절 / 셀 선택·꾸미기 */
+  #tbl{position:relative;}
+  #tbl th, #tbl td{position:relative;}
+  .merged-hidden{display:none;}
+  .wrapcol{white-space:normal !important; word-break:break-all;}
+  .col-grip{position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:6; user-select:none;}
+  .row-grip{position:absolute; left:0; bottom:-3px; width:100%; height:7px; cursor:row-resize; z-index:6; user-select:none;}
+  .col-grip:hover, .row-grip:hover{background:rgba(49,130,246,.45);}
+  .capture .col-grip, .capture .row-grip{display:none;}
+  table.selmode{cursor:cell;}
+  table.selmode td, table.selmode th{user-select:none;}
+  td.cell-sel, th.cell-sel{outline:2px solid var(--blue); outline-offset:-2px; box-shadow:inset 0 0 0 200px rgba(49,130,246,.12);}
+  .capture td.cell-sel, .capture th.cell-sel{outline:none; box-shadow:none;}
+
+  /* 셀 서식 바 */
+  .fmtbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    background:#f1f4f7; border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:12px;}
+  .fmtbar .ci{display:flex; align-items:center; gap:5px; font-size:12px; color:#4e5968;}
+  .fmtbar .vsep{width:1px; align-self:stretch; background:var(--line); margin:0 2px;}
+  .toolbar button.on, .fmtbar button.on{background:var(--blue); color:#fff;}
 
   /* 칩에 마우스를 올리면 해당 담보/열을 표에서 강조 */
   tr.row-flash td{background:#fff4d6 !important;}
@@ -218,7 +239,7 @@
     <button class="btn-ghost" onclick="newBlankSheet()" style="align-self:flex-end;">🆕 빈 시트로 시작</button>
   </div>
   <textarea id="pasteArea" placeholder="또는, 엑셀 셀 범위를 복사(Ctrl+C)한 뒤 여기에 붙여넣기(Ctrl+V) 하세요.&#10;예) 담보명 ▸ 가입금액 ▸ 보험기간 ... 이 한 줄씩 들어옵니다."></textarea>
-  <p class="hint"><b>엑셀 파일</b>을 그대로 불러오거나, 빈 시트에서 <b>Tab</b>=오른쪽 · <b>Enter</b>=아래 · <b>Alt+Enter</b>=칸 안 줄바꿈으로 입력하세요. 셀을 클릭해 바로 수정도 됩니다.<br><span style="color:#b0676a;">※ 엑셀의 병합된 셀은 가장 왼쪽·위 칸에만 값이 들어오고 나머지는 빈칸으로 불러와집니다(불러온 뒤 수정 가능).</span></p>
+  <p class="hint"><b>엑셀 파일</b>을 불러오면 셀 <b>병합·배경색·글자색·크기·굵기·열너비</b>까지 그대로 가져옵니다. 빈 시트에서는 <b>Tab</b>=다음 칸 · <b>Enter</b>=칸 안에서 줄바꿈(2줄) · <b>Shift+Enter</b>=아래 칸으로 이동. 셀을 클릭해 바로 수정도 됩니다.<br><span style="color:#5b8def;">※ 색·크기·굵기·병합은 ④ 미리보기의 <b>🎨 셀 선택·꾸미기</b>에서 자유롭게 바꿀 수 있고, 열·행 경계를 마우스로 끌면 너비·높이가 조절됩니다.</span></p>
   <div class="toolbar" style="margin-top:12px;">
     <button class="btn-ghost" onclick="buildFromPaste()">📋 붙여넣기로 표 만들기</button>
     <button class="btn-ghost" onclick="loadSample()">예시 데이터 불러오기</button>
@@ -291,15 +312,38 @@
 
 <!-- 4. 결과 표 + 저장 -->
 <div class="card" id="resultCard" style="display:none;">
-  <h2>④ 미리보기 (셀을 직접 클릭해 수정할 수 있어요)</h2>
+  <h2>④ 미리보기 (셀 클릭=수정 · 🎨 꾸미기로 색·크기·병합)</h2>
+  <div class="toolbar" style="margin-bottom:10px; align-items:center;">
+    <button id="selModeBtn" class="btn-ghost" onclick="toggleSelMode()">🎨 셀 선택·꾸미기</button>
+    <span class="hint" style="margin:0;">셀을 클릭/드래그해 선택 → 색·크기·굵기·병합. 열·행 경계를 마우스로 끌면 너비·높이가 조절됩니다.</span>
+  </div>
+  <div id="fmtBar" class="fmtbar" style="display:none;">
+    <span class="ci">셀 배경<input type="color" id="fmtBg" value="#fff4d6" oninput="applyFmt('bg',this.value)"></span>
+    <button class="btn-ghost" onclick="applyFmt('bg','')">배경 지움</button>
+    <span class="ci">글자색<input type="color" id="fmtFg" value="#191f28" oninput="applyFmt('fg',this.value)"></span>
+    <span class="ci">크기<select id="fmtFs" onchange="applyFmt('fs',this.value)">
+      <option value="">크기</option><option>11px</option><option>12px</option><option>13px</option>
+      <option>14px</option><option>16px</option><option>18px</option><option>20px</option>
+      <option>24px</option><option>28px</option><option>32px</option><option>40px</option></select></span>
+    <button class="btn-ghost" onclick="applyFmt('bold')"><b>굵게</b></button>
+    <button class="btn-ghost" onclick="applyFmt('al','left')">⬅</button>
+    <button class="btn-ghost" onclick="applyFmt('al','center')">⬛</button>
+    <button class="btn-ghost" onclick="applyFmt('al','right')">➡</button>
+    <span class="vsep"></span>
+    <button class="btn-ghost" onclick="mergeCells()">⬚ 셀 병합</button>
+    <button class="btn-ghost" onclick="unmergeCells()">병합 해제</button>
+    <button class="btn-ghost" onclick="clearFmt()">서식 지우기</button>
+    <span id="fmtInfo" class="hint" style="margin:0;"></span>
+  </div>
   <div id="tableWrap"></div>
   <div class="toolbar" style="margin-top:16px;">
     <button class="btn-present" onclick="enterPreso()">🎬 발표 모드 시작</button>
     <button class="btn-primary" onclick="saveImage()">💾 이미지로 저장 (PNG)</button>
     <button class="btn-ghost" onclick="copyImage()">📎 이미지 복사</button>
+    <button class="btn-ghost" onclick="savePresoFile()">💼 고객용(발표) 파일로 저장</button>
     <button class="btn-danger" onclick="resetAll()">♻️ 초기화</button>
   </div>
-  <p class="hint">저장 시 체크 해제한 담보·열과 편집 표시선은 빠지고 깔끔한 표만 이미지가 됩니다.</p>
+  <p class="hint">저장 시 체크 해제한 담보·열과 편집 표시선은 빠지고 깔끔한 표만 이미지가 됩니다. <b>고객용 파일</b>은 선택·색·병합이 그대로 저장되어, 불러오면 바로 발표 화면으로 열 수 있습니다.</p>
 </div>
 
 <!-- ===== 발표(프레젠테이션) 모드 오버레이 ===== -->
@@ -363,7 +407,7 @@ function importExcel(file){
   const fr = new FileReader();
   fr.onload = ()=>{
     try{
-      _wb = XLSX.read(fr.result, {type:'array'});
+      _wb = XLSX.read(fr.result, {type:'array', cellStyles:true});
       const sel = document.getElementById('excelSheet'); sel.innerHTML='';
       _wb.SheetNames.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
       document.getElementById('sheetTabs').style.display = _wb.SheetNames.length>1 ? 'inline-flex' : 'none';
@@ -379,36 +423,106 @@ function importExcel(file){
 function applyExcelSheet(){
   if(!_wb) return;
   const ws = _wb.Sheets[document.getElementById('excelSheet').value];
-  let aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:''});
-  aoa = aoa.filter(r=> r.some(c=> String(c).trim()!==''));   // 빈 행 제거
-  if(aoa.length===0){ alert('이 시트에 데이터가 없습니다.'); return; }
-  const cols = Math.max(...aoa.map(r=>r.length));
-  aoa.forEach(r=>{ while(r.length<cols) r.push(''); for(let i=0;i<r.length;i++) r[i]=String(r[i]); });
-  buildTable(aoa);
+  const parsed = parseSheetRich(ws);
+  if(!parsed){ alert('이 시트에 데이터가 없습니다.'); return; }
+  const model = {
+    head: parsed.grid[0].map((cd,i)=>{ if(parsed.colW[i]) cd.w=parsed.colW[i]; return cd; }),
+    rows: parsed.grid.slice(1).map((row,ri)=>({ cells:row, rh: parsed.rowH[ri+1]||undefined }))
+  };
+  buildTableModel(model);
 }
 
-function buildTable(grid){
-  colHidden = new Array(grid[0].length).fill(false);
-  const tbl = document.createElement('table');
-  tbl.id = 'tbl';
-
-  const thead = document.createElement('thead');
-  const htr = document.createElement('tr');
-  grid[0].forEach(c=>{
-    const th = document.createElement('th');
-    th.contentEditable = true; th.textContent = c;
-    htr.appendChild(th);
+/* 엑셀 셀 스타일(배경·글자색·크기·굵기·정렬) + 병합 + 너비·높이까지 그대로 읽기 */
+function hexFromRgb(rgb){ if(!rgb) return null; const h=String(rgb).replace('#',''); return '#'+h.slice(-6).toLowerCase(); }
+function parseSheetRich(ws){
+  if(!ws || !ws['!ref']) return null;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const R0=range.s.r, R1=range.e.r, C0=range.s.c, C1=range.e.c;
+  const grid=[];
+  for(let r=R0;r<=R1;r++){
+    const row=[];
+    for(let c=C0;c<=C1;c++){
+      const cell = ws[XLSX.utils.encode_cell({r,c})];
+      const d = {};
+      const text = cell ? (cell.w!=null ? cell.w : String(cell.v==null?'':cell.v)) : '';
+      d.text = text; d.h = textToHtml(text);
+      const s = cell && cell.s;
+      if(s){
+        const fillRgb = s.fill && s.fill.fgColor && s.fill.fgColor.rgb;
+        if(fillRgb) d.bg = hexFromRgb(fillRgb);
+        if(s.font){
+          if(s.font.color && s.font.color.rgb) d.fg = hexFromRgb(s.font.color.rgb);
+          if(s.font.sz) d.fs = Math.round(s.font.sz * 1.33) + 'px';
+          if(s.font.bold) d.fw = 700;
+        }
+        if(s.alignment && s.alignment.horizontal) d.al = s.alignment.horizontal;
+      }
+      row.push(d);
+    }
+    grid.push(row);
+  }
+  // 병합
+  (ws['!merges']||[]).forEach(m=>{
+    const r=m.s.r-R0, c=m.s.c-C0;
+    if(r<0||c<0||!grid[r]||!grid[r][c]) return;
+    const cs=m.e.c-m.s.c+1, rs=m.e.r-m.s.r+1;
+    grid[r][c].cs=cs; grid[r][c].rs=rs;
+    for(let rr=r;rr<r+rs;rr++) for(let cc=c;cc<c+cs;cc++){
+      if((rr!==r||cc!==c) && grid[rr] && grid[rr][cc]) grid[rr][cc].mh=true;
+    }
   });
+  // 너비 / 높이
+  const cols=ws['!cols']||[], rws=ws['!rows']||[];
+  const colW=[]; for(let c=C0;c<=C1;c++){ const cc=cols[c]; const px = cc&&(cc.wpx || (cc.wch&&cc.wch*7.5)); colW[c-C0]= px? Math.round(px)+'px':null; }
+  const rowH=[]; for(let r=R0;r<=R1;r++){ const rr=rws[r]; rowH[r-R0]= rr&&rr.hpx? Math.round(rr.hpx)+'px':null; }
+  return {grid, colW, rowH};
+}
+
+function textToHtml(t){ return escapeHtml(String(t==null?'':t)).replace(/\n/g,'<br>'); }
+
+/* 셀 데이터(객체) → 실제 셀 DOM */
+function makeCell(tag, cd){
+  cd = cd || {};
+  const e = document.createElement(tag);
+  e.contentEditable = 'true';
+  e.innerHTML = cd.h!=null ? cd.h : textToHtml(cd.text||'');
+  if(cd.bg) e.style.background = cd.bg;
+  if(cd.fg) e.style.color = cd.fg;
+  if(cd.fs) e.style.fontSize = cd.fs;
+  if(cd.fw) e.style.fontWeight = cd.fw;
+  if(cd.al) e.style.textAlign = cd.al;
+  if(cd.cs>1) e.colSpan = cd.cs;
+  if(cd.rs>1) e.rowSpan = cd.rs;
+  if(cd.mh) e.classList.add('merged-hidden');
+  if(cd.wrap) e.classList.add('wrapcol');
+  if(cd.w && tag==='TH') e.style.width = cd.w;
+  return e;
+}
+
+/* 문자열 격자 → 모델 변환 후 빌드(붙여넣기·예시·빈 시트용) */
+function buildTable(grid){
+  buildTableModel({
+    head: grid[0].map(t=>({h:textToHtml(t)})),
+    rows: grid.slice(1).map(r=>({ cells: r.map(t=>({h:textToHtml(t)})) }))
+  });
+}
+
+/* 모델(스타일·병합·너비·높이 포함) → 표 빌드 */
+function buildTableModel(m){
+  const ncol = m.head.length;
+  colHidden = (m.colHidden && m.colHidden.length===ncol) ? m.colHidden.slice() : new Array(ncol).fill(false);
+
+  const tbl = document.createElement('table'); tbl.id = 'tbl';
+  const thead = document.createElement('thead'); const htr = document.createElement('tr');
+  m.head.forEach(cd=> htr.appendChild(makeCell('TH', cd)));
   thead.appendChild(htr); tbl.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  grid.slice(1).forEach(row=>{
+  m.rows.forEach(rowObj=>{
     const tr = document.createElement('tr');
-    row.forEach(c=>{
-      const td = document.createElement('td');
-      td.contentEditable = true; td.textContent = c;
-      tr.appendChild(td);
-    });
+    if(rowObj.hidden) tr.classList.add('hidden-row');
+    if(rowObj.rh) tr.style.height = rowObj.rh;
+    rowObj.cells.forEach(cd=> tr.appendChild(makeCell('TD', cd)));
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);
@@ -420,8 +534,44 @@ function buildTable(grid){
   document.getElementById('visCard').style.display = 'block';
   document.getElementById('optCard').style.display = 'block';
   document.getElementById('resultCard').style.display = 'block';
+  decorateGrips(); applySelModeState(); clearSel();
   refreshControls(); applyStyle(); applyColVisibility();
   autosave();
+}
+
+/* 너비·높이 드래그 핸들 부착 */
+function decorateGrips(){
+  const tbl = document.getElementById('tbl'); if(!tbl) return;
+  tbl.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove());
+  [...tbl.tHead.rows[0].cells].forEach(th=>{
+    const g=document.createElement('div'); g.className='col-grip'; g.contentEditable='false';
+    g.addEventListener('pointerdown', startColResize); th.appendChild(g);
+  });
+  [...tbl.tBodies[0].rows].forEach(tr=>{
+    const c0=tr.cells[0]; if(!c0) return;
+    const g=document.createElement('div'); g.className='row-grip'; g.contentEditable='false';
+    g.addEventListener('pointerdown', startRowResize); c0.appendChild(g);
+  });
+}
+function startColResize(e){
+  e.preventDefault(); e.stopPropagation();
+  const th=e.target.parentElement, i=th.cellIndex, tbl=document.getElementById('tbl');
+  const startX=e.clientX, startW=th.offsetWidth;
+  const move=ev=>{ const w=Math.max(28, startW+ev.clientX-startX); th.style.width=w+'px'; setColWrap(i,true); };
+  const up=()=>{ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); scheduleAutosave(); };
+  window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+}
+function startRowResize(e){
+  e.preventDefault(); e.stopPropagation();
+  const tr=e.target.parentElement.parentElement;
+  const startY=e.clientY, startH=tr.offsetHeight;
+  const move=ev=>{ tr.style.height=Math.max(20, startH+ev.clientY-startY)+'px'; };
+  const up=()=>{ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); scheduleAutosave(); };
+  window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+}
+function setColWrap(i,on){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{ const c=tr.cells[i]; if(c) c.classList.toggle('wrapcol',on); });
 }
 
 /* ---------- 표시/숨김 컨트롤 ---------- */
@@ -481,22 +631,24 @@ function applyColVisibility(){
 
 /* ---------- 행/열 추가·삭제 ---------- */
 function addRow(){
+  unmergeAll();
   const tbl = document.getElementById('tbl');
   const n = tbl.tHead.rows[0].cells.length;
   const tr = tbl.tBodies[0].insertRow();
-  for(let i=0;i<n;i++){ const td=tr.insertCell(); td.contentEditable=true; td.textContent=''; }
-  refreshControls(); applyColVisibility();
+  for(let i=0;i<n;i++) tr.appendChild(makeCell('TD',{}));
+  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility();
 }
 function addCol(){
+  unmergeAll();
   const tbl = document.getElementById('tbl');
-  const th = document.createElement('th'); th.contentEditable=true; th.textContent='새 열';
-  tbl.tHead.rows[0].appendChild(th);
-  [...tbl.tBodies[0].rows].forEach(tr=>{ const td=tr.insertCell(); td.contentEditable=true; td.textContent=''; });
+  tbl.tHead.rows[0].appendChild(makeCell('TH',{h:'새 열'}));
+  [...tbl.tBodies[0].rows].forEach(tr=> tr.appendChild(makeCell('TD',{})));
   colHidden.push(false);
-  refreshControls(); applyColVisibility();
+  decorateGrips(); applySelModeState(); refreshControls(); applyColVisibility();
 }
 function deleteRow(tr){
   // 클릭한 그 행(객체)을 빨갛게 표시 후 제거 — 인덱스를 쓰지 않으므로 항상 정확히 그 담보만 삭제됨
+  unmergeAll();
   tr.classList.add('removing');
   setTimeout(()=>{ tr.remove(); refreshControls(); }, 220);
 }
@@ -507,14 +659,122 @@ function flashCol(i, on){
   });
 }
 function deleteCol(i){
+  unmergeAll();
   const tbl = document.getElementById('tbl');
   const cells = [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].map(tr=> tr.cells[i]).filter(Boolean);
   cells.forEach(c=> c.classList.add('col-removing'));
   setTimeout(()=>{
     [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=> tr.deleteCell(i));
     colHidden.splice(i,1);
-    refreshControls(); applyColVisibility();
+    decorateGrips(); refreshControls(); applyColVisibility();
   }, 220);
+}
+
+/* ==========================================================
+   🎨 셀 선택 · 서식(색·크기·굵기·정렬) · 병합
+   ========================================================== */
+let selMode=false, selecting=false, selAnchor=null;
+const selCells = new Set();
+
+function editRows(){ const t=document.getElementById('tbl'); return t ? [t.tHead.rows[0], ...t.tBodies[0].rows] : []; }
+function cellRC(cell){ const rows=editRows(); return { r: rows.indexOf(cell.parentElement), c: cell.cellIndex }; }
+function cellAt(r,c){ const rows=editRows(); return rows[r] ? rows[r].cells[c] : null; }
+
+function toggleSelMode(){
+  selMode=!selMode;
+  document.getElementById('selModeBtn').classList.toggle('on', selMode);
+  document.getElementById('fmtBar').style.display = selMode ? 'flex' : 'none';
+  applySelModeState();
+  if(!selMode) clearSel();
+}
+function applySelModeState(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  tbl.classList.toggle('selmode', selMode);
+  tbl.querySelectorAll('th,td').forEach(c=> c.contentEditable = selMode ? 'false' : 'true');
+}
+function clearSel(){
+  selCells.forEach(c=> c.classList.remove('cell-sel'));
+  selCells.clear(); selAnchor=null; updateFmtInfo();
+}
+function updateFmtInfo(){
+  const el=document.getElementById('fmtInfo'); if(el) el.textContent = selCells.size ? `${selCells.size}개 셀 선택됨` : '셀을 클릭/드래그해 선택하세요';
+}
+function selectRange(a,b){
+  selCells.forEach(c=> c.classList.remove('cell-sel')); selCells.clear();
+  const A=cellRC(a), B=cellRC(b);
+  const r1=Math.min(A.r,B.r), r2=Math.max(A.r,B.r), c1=Math.min(A.c,B.c), c2=Math.max(A.c,B.c);
+  for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++){
+    const cell=cellAt(r,c);
+    if(cell && !cell.classList.contains('merged-hidden')){ cell.classList.add('cell-sel'); selCells.add(cell); }
+  }
+  updateFmtInfo();
+}
+function selDown(e){
+  if(!selMode) return;
+  if(e.target.classList && (e.target.classList.contains('col-grip')||e.target.classList.contains('row-grip'))) return;
+  const cell=e.target.closest('td,th'); if(!cell) return;
+  e.preventDefault(); selecting=true;
+  if(e.shiftKey && selAnchor){ selectRange(selAnchor, cell); }
+  else if(e.ctrlKey||e.metaKey){
+    if(cell.classList.contains('cell-sel')){ cell.classList.remove('cell-sel'); selCells.delete(cell); }
+    else if(!cell.classList.contains('merged-hidden')){ cell.classList.add('cell-sel'); selCells.add(cell); }
+    selAnchor=cell; updateFmtInfo();
+  } else { selAnchor=cell; selectRange(cell, cell); }
+}
+function selOver(e){
+  if(!selMode||!selecting||!selAnchor) return;
+  const cell=e.target.closest('td,th'); if(cell) selectRange(selAnchor, cell);
+}
+
+function applyFmt(prop,val){
+  if(!selCells.size){ alert('먼저 셀을 클릭/드래그해 선택하세요.'); return; }
+  selCells.forEach(c=>{
+    if(prop==='bg') c.style.background = val||'';
+    else if(prop==='fg') c.style.color = val;
+    else if(prop==='fs') c.style.fontSize = val||'';
+    else if(prop==='al') c.style.textAlign = val;
+    else if(prop==='bold'){ const b=(c.style.fontWeight==='700'||c.style.fontWeight==='bold'); c.style.fontWeight = b?'':'700'; }
+  });
+  scheduleAutosave();
+}
+function clearFmt(){
+  if(!selCells.size){ alert('먼저 셀을 선택하세요.'); return; }
+  selCells.forEach(c=>{ c.style.background=''; c.style.color=''; c.style.fontSize=''; c.style.fontWeight=''; c.style.textAlign=''; });
+  scheduleAutosave();
+}
+function selBox(){
+  let r1=Infinity,r2=-1,c1=Infinity,c2=-1;
+  selCells.forEach(cell=>{ const{r,c}=cellRC(cell); r1=Math.min(r1,r); r2=Math.max(r2,r); c1=Math.min(c1,c); c2=Math.max(c2,c); });
+  return {r1,r2,c1,c2};
+}
+function mergeCells(){
+  if(selCells.size<2){ alert('병합할 셀을 2개 이상 선택하세요.'); return; }
+  const {r1,r2,c1,c2}=selBox();
+  if(r1===0 && r2>0){ alert('머리글 행과 본문 행은 함께 병합할 수 없습니다.'); return; }
+  const anchor=cellAt(r1,c1);
+  for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++){
+    const cell=cellAt(r,c); if(!cell || cell===anchor) continue;
+    cell.classList.add('merged-hidden'); cell.classList.remove('cell-sel');
+  }
+  anchor.colSpan=c2-c1+1; anchor.rowSpan=r2-r1+1;
+  selCells.clear(); selCells.add(anchor); updateFmtInfo();
+  applyColVisibility(); scheduleAutosave();
+}
+function unmergeCells(){
+  let did=false;
+  [...selCells].forEach(anchor=>{
+    if(anchor.colSpan>1||anchor.rowSpan>1){ unmergeOne(anchor); did=true; }
+  });
+  if(!did) alert('병합된 셀(병합 후 큰 칸)을 선택한 뒤 눌러주세요.');
+  applyColVisibility(); scheduleAutosave();
+}
+function unmergeOne(anchor){
+  const {r,c}=cellRC(anchor), cs=anchor.colSpan, rs=anchor.rowSpan;
+  for(let rr=r;rr<r+rs;rr++) for(let cc=c;cc<c+cs;cc++){ const x=cellAt(rr,cc); if(x) x.classList.remove('merged-hidden'); }
+  anchor.colSpan=1; anchor.rowSpan=1;
+}
+function unmergeAll(){
+  editRows().forEach(tr=> [...tr.cells].forEach(cell=>{ if(cell.colSpan>1||cell.rowSpan>1) unmergeOne(cell); }));
 }
 
 /* ---------- 스타일 ---------- */
@@ -540,7 +800,8 @@ function applyStyle(){
 /* ---------- 이미지 저장 ---------- */
 function renderCanvas(){
   const tbl = document.getElementById('tbl');
-  return html2canvas(tbl, {scale:2, backgroundColor:'#ffffff'});
+  tbl.classList.add('capture');
+  return html2canvas(tbl, {scale:2, backgroundColor:'#ffffff'}).finally(()=> tbl.classList.remove('capture'));
 }
 function saveImage(){
   if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
@@ -644,13 +905,17 @@ function onCellKey(e){
   const cell = e.target.closest('[contenteditable]');
   if(!cell || !document.getElementById('tbl')?.contains(cell)) return;
   let t=null;
-  if(e.key==='Enter' && e.altKey){ e.preventDefault(); document.execCommand('insertLineBreak'); return; }
-  if(e.key==='Enter'){ e.preventDefault(); t = navFrom(cell, e.shiftKey?-1:1, 0); }
+  // Enter = 칸 안에서 줄바꿈(2줄), Shift+Enter = 아래 칸으로 이동, Tab = 다음 칸
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); document.execCommand('insertLineBreak'); return; }
+  if(e.key==='Enter' && e.shiftKey){ e.preventDefault(); t = navFrom(cell, 1, 0); }
   else if(e.key==='Tab'){ e.preventDefault(); t = navFrom(cell, 0, e.shiftKey?-1:1); }
   if(t){ t.focus(); selectCell(t); }
 }
 document.getElementById('tableWrap').addEventListener('keydown', onCellKey);
 document.getElementById('tableWrap').addEventListener('input', ()=>{ refreshControls(); scheduleAutosave(); });
+document.getElementById('tableWrap').addEventListener('pointerdown', selDown);
+document.getElementById('tableWrap').addEventListener('pointerover', selOver);
+window.addEventListener('pointerup', ()=>{ selecting=false; });
 
 /* ==========================================================
    🔍 검색 · 전체 펼치기/숨기기/반전
@@ -690,13 +955,31 @@ function setStyleState(s){
   document.getElementById('wrap').checked=!!s.wrap;
   applyStyle();
 }
+function readCell(c){
+  const clone=c.cloneNode(true);
+  clone.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove());
+  const d={h:clone.innerHTML};
+  const st=c.style;
+  if(st.background||st.backgroundColor) d.bg = st.background||st.backgroundColor;
+  if(st.color) d.fg = st.color;
+  if(st.fontSize) d.fs = st.fontSize;
+  if(st.fontWeight==='700'||st.fontWeight==='bold') d.fw = 700;
+  if(st.textAlign) d.al = st.textAlign;
+  if(c.colSpan>1) d.cs = c.colSpan;
+  if(c.rowSpan>1) d.rs = c.rowSpan;
+  if(c.classList.contains('merged-hidden')) d.mh = true;
+  if(c.classList.contains('wrapcol')) d.wrap = true;
+  if(c.tagName==='TH' && c.style.width) d.w = c.style.width;
+  return d;
+}
 function serialize(){
   const tbl=document.getElementById('tbl'); if(!tbl) return null;
   return {
-    head:[...tbl.tHead.rows[0].cells].map(c=>c.textContent),
+    head:[...tbl.tHead.rows[0].cells].map(readCell),
     rows:[...tbl.tBodies[0].rows].map(tr=>({
-      cells:[...tr.cells].map(c=>c.textContent),
-      hidden:tr.classList.contains('hidden-row')
+      cells:[...tr.cells].map(readCell),
+      hidden:tr.classList.contains('hidden-row'),
+      rh: tr.style.height||undefined
     })),
     colHidden:[...colHidden],
     style:getStyleState()
@@ -704,12 +987,14 @@ function serialize(){
 }
 function deserialize(d){
   if(!d || !d.head) return;
-  buildTable([d.head, ...d.rows.map(r=>r.cells)]);
-  const tbl=document.getElementById('tbl');
-  d.rows.forEach((r,i)=>{ if(r.hidden) tbl.tBodies[0].rows[i].classList.add('hidden-row'); });
-  colHidden = Array.isArray(d.colHidden) ? d.colHidden.slice() : colHidden;
+  const head = d.head.map(h=> typeof h==='string' ? {h:textToHtml(h)} : h);
+  const rows = d.rows.map(r=>({
+    cells: r.cells.map(c=> typeof c==='string' ? {h:textToHtml(c)} : c),
+    hidden: r.hidden, rh: r.rh
+  }));
+  buildTableModel({ head, rows, colHidden: d.colHidden });
   setStyleState(d.style);
-  refreshControls(); applyColVisibility();
+  if(d.autoPreso) setTimeout(()=>{ if(confirm('고객용(발표) 파일입니다. 바로 발표 화면으로 열까요?')) enterPreso(); }, 350);
 }
 function readSheets(){ try{ return JSON.parse(localStorage.getItem(LS_SHEETS)||'{}'); }catch(e){ return {}; } }
 function refreshSheetList(){
@@ -749,6 +1034,15 @@ function exportJSON(){
   const a=document.createElement('a'); a.download=name+'.json';
   a.href=URL.createObjectURL(blob); a.click(); URL.revokeObjectURL(a.href);
 }
+function savePresoFile(){
+  const data=serialize(); if(!data){ alert('표가 없습니다.'); return; }
+  data.autoPreso=true;
+  const name=(document.getElementById('sheetName').value.trim()||'고객용담보표');
+  const blob=new Blob([JSON.stringify({name, ...data}, null, 2)], {type:'application/json'});
+  const a=document.createElement('a'); a.download=name+'.json';
+  a.href=URL.createObjectURL(blob); a.click(); URL.revokeObjectURL(a.href);
+  alert('고객용 파일을 저장했습니다. 이 파일을 "파일 불러오기"로 열면 바로 발표 화면으로 보여집니다.');
+}
 function importJSON(file){
   if(!file) return;
   const fr=new FileReader();
@@ -776,31 +1070,94 @@ window.addEventListener('DOMContentLoaded', ()=>{
 const SVGNS = 'http://www.w3.org/2000/svg';
 const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false };
 
-/* 현재 편집표에서 "보이는" 담보/열만 추려서 발표용 격자 생성 */
+/* 발표용 셀 데이터 추출(스타일·줄바꿈 보존) */
+function readPresoCD(cell){
+  const clone=cell.cloneNode(true);
+  clone.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove());
+  const d={ h:clone.innerHTML, text:cell.textContent.trim() };
+  const st=cell.style;
+  if(st.background||st.backgroundColor) d.bg=st.background||st.backgroundColor;
+  if(st.color) d.fg=st.color;
+  if(st.fontWeight==='700'||st.fontWeight==='bold') d.fw=700;
+  if(st.textAlign) d.al=st.textAlign;
+  return d;
+}
+/* 현재 편집표에서 "보이는" 담보/열만 추려서 발표용 격자 생성(병합·색 보존) */
 function getVisibleGrid(){
   const tbl = document.getElementById('tbl');
-  const cols = [...tbl.tHead.rows[0].cells].map((_,i)=>i).filter(i=>!colHidden[i]);
-  const head = cols.map(i=> tbl.tHead.rows[0].cells[i].textContent.trim());
-  const rows = [...tbl.tBodies[0].rows]
-    .filter(tr=> !tr.classList.contains('hidden-row'))
-    .map(tr=> cols.map(i=> tr.cells[i].textContent.trim()));
+  const rowsAll = [tbl.tHead.rows[0], ...tbl.tBodies[0].rows];
+  const ncol = tbl.tHead.rows[0].cells.length;
+
+  // 병합 정보 수집
+  const spanAt={}, coveredBy={};
+  rowsAll.forEach((tr,r)=>{ [...tr.cells].forEach((cell,c)=>{
+    if(!cell.classList.contains('merged-hidden') && (cell.colSpan>1||cell.rowSpan>1)){
+      spanAt[r+','+c]={cs:cell.colSpan, rs:cell.rowSpan};
+      for(let rr=r;rr<r+cell.rowSpan;rr++) for(let cc=c;cc<c+cell.colSpan;cc++){ if(rr!==r||cc!==c) coveredBy[rr+','+cc]=r+','+c; }
+    }
+  });});
+
+  const colVis=[]; for(let c=0;c<ncol;c++) colVis[c]=!colHidden[c];
+  const rowVis=rowsAll.map((tr,r)=> r===0 ? true : !tr.classList.contains('hidden-row'));
+
+  // 일부가 숨겨진 병합은 해제하여 처리(레이아웃 안전)
+  Object.keys(spanAt).forEach(k=>{
+    const [r,c]=k.split(',').map(Number), {cs,rs}=spanAt[k]; let ok=true;
+    for(let rr=r;rr<r+rs&&ok;rr++) for(let cc=c;cc<c+cs&&ok;cc++){ if(!rowVis[rr]||!colVis[cc]) ok=false; }
+    if(!ok){ delete spanAt[k]; for(let rr=r;rr<r+rs;rr++) for(let cc=c;cc<c+cs;cc++){ if(coveredBy[rr+','+cc]===k) delete coveredBy[rr+','+cc]; } }
+  });
+
+  const visCols=[]; for(let c=0;c<ncol;c++) if(colVis[c]) visCols.push(c);
+  const colNew={}; visCols.forEach((c,i)=> colNew[c]=i);
+
+  // 헤더
+  const head=[];
+  visCols.forEach(c=>{
+    if(coveredBy['0,'+c]) return;
+    const cd=readPresoCD(rowsAll[0].cells[c]); cd.c=colNew[c];
+    const sp=spanAt['0,'+c]; if(sp) cd.cs=sp.cs;
+    head.push(cd);
+  });
+
+  // 본문
+  const visRowsIdx=[]; for(let r=1;r<rowsAll.length;r++) if(rowVis[r]) visRowsIdx.push(r);
+  const rows=[];
+  visRowsIdx.forEach(r=>{
+    const out=[];
+    visCols.forEach(c=>{
+      if(coveredBy[r+','+c]) return;
+      const cd=readPresoCD(rowsAll[r].cells[c]); cd.c=colNew[c];
+      const sp=spanAt[r+','+c]; if(sp){ cd.cs=sp.cs; cd.rs=sp.rs; }
+      out.push(cd);
+    });
+    rows.push(out);
+  });
   return { head, rows };
 }
 
+function applyPresoCellStyle(e,cd){
+  if(cd.bg) e.style.background=cd.bg;
+  if(cd.fg) e.style.color=cd.fg;
+  if(cd.fw) e.style.fontWeight=cd.fw;
+  if(cd.al) e.style.textAlign=cd.al;
+}
 function buildPresoTable(grid){
   const tbl = document.createElement('table'); tbl.id = 'presoTable';
   const thead = document.createElement('thead');
 
-  // 상단 드래그 핸들 줄
+  // 상단 드래그 핸들 줄(병합 폭만큼 핸들 생성)
   const hr = document.createElement('tr'); hr.className = 'handle-row';
   hr.appendChild(el('th','corner'));
-  grid.head.forEach((_,c)=>{ const h=el('th','chandle','⋯'); h.dataset.col=c; hr.appendChild(h); });
+  grid.head.forEach(cd=>{ const span=cd.cs||1; for(let k=0;k<span;k++){ const h=el('th','chandle','⋯'); h.dataset.col=cd.c+k; hr.appendChild(h); } });
   thead.appendChild(hr);
 
   // 실제 헤더 줄
   const headr = document.createElement('tr'); headr.className = 'head-row';
   headr.appendChild(el('th','rhandle-corner'));
-  grid.head.forEach((t,c)=>{ const th=el('th',null,t); th.dataset.col=c; headr.appendChild(th); });
+  grid.head.forEach(cd=>{
+    const th=document.createElement('th'); th.innerHTML = cd.h!=null?cd.h:textToHtml(cd.text||'');
+    th.dataset.col=cd.c; if(cd.cs>1) th.colSpan=cd.cs; applyPresoCellStyle(th,cd); headr.appendChild(th);
+  });
   thead.appendChild(headr);
   tbl.appendChild(thead);
 
@@ -809,9 +1166,13 @@ function buildPresoTable(grid){
   grid.rows.forEach((row,r)=>{
     const tr = document.createElement('tr'); tr.dataset.row=r;
     const rh = el('td','rhandle','⋮'); rh.dataset.row=r; tr.appendChild(rh);
-    row.forEach((v,c)=>{
-      const td = el('td', c===0?'name-cell':null, v);
-      td.dataset.row=r; td.dataset.col=c; tr.appendChild(td);
+    row.forEach(cd=>{
+      const td = document.createElement('td');
+      if(cd.c===0) td.classList.add('name-cell');
+      td.innerHTML = cd.h!=null?cd.h:textToHtml(cd.text||'');
+      td.dataset.row=r; td.dataset.col=cd.c;
+      if(cd.cs>1) td.colSpan=cd.cs; if(cd.rs>1) td.rowSpan=cd.rs;
+      applyPresoCellStyle(td,cd); tr.appendChild(td);
     });
     tbody.appendChild(tr);
   });
@@ -990,12 +1351,14 @@ function toggleBubble(r,c){
 function populateSumCols(grid){
   const sel = document.getElementById('sumCol'); if(!sel) return;
   sel.innerHTML='';
-  grid.head.forEach((h,i)=>{ if(i===0) return;   // 0번은 담보명
-    const o=document.createElement('option'); o.value=i; o.textContent=h||('열'+i); sel.appendChild(o); });
-  // 금액으로 보이는 열 자동 선택(가입금액·보험금 우선, 없으면 마지막 열)
-  let pick=-1;
-  grid.head.forEach((h,i)=>{ if(i>0 && pick<0 && /금액|보험금|가입/.test(h)) pick=i; });
-  if(pick<0) pick = grid.head.length-1;
+  let pick=-1, lastC=0;
+  grid.head.forEach(cd=>{
+    if(cd.c===0) return;   // 0번은 담보명
+    lastC=cd.c;
+    const o=document.createElement('option'); o.value=cd.c; o.textContent=(cd.text||('열'+cd.c)); sel.appendChild(o);
+    if(pick<0 && /금액|보험금|가입/.test(cd.text||'')) pick=cd.c;
+  });
+  if(pick<0) pick=lastC;
   sel.value=pick;
 }
 function clearSumGlow(){
