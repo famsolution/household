@@ -150,9 +150,10 @@
   .btn-present:hover{background:#1f2937;}
 
   /* ===== 발표 모드 ===== */
-  #preso{position:fixed; inset:0; z-index:1000; display:none; overflow:auto;
+  #preso{position:fixed; inset:0; z-index:1000; display:none; overflow:auto; text-align:center;
          background:var(--stageBg,#0f172a); padding:0 0 60px;}
   #preso.on{display:block;}
+  #presoTable td.cellhl{ background-color:var(--cellHlColor,#fde047) !important; }
   #presoBar{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:1100;
     display:flex; gap:6px; flex-wrap:wrap; align-items:center; max-width:96vw;
     background:rgba(255,255,255,.96); backdrop-filter:blur(6px);
@@ -448,6 +449,7 @@
     <span class="sep"></span>
     <button id="m-rowhl"   onclick="setPresoMode('rowhl')">🖍 행 강조</button>
     <button id="m-colhl"   onclick="setPresoMode('colhl')">🖍 열 강조</button>
+    <button id="m-cellhl"  onclick="setPresoMode('cellhl')">🖌 칸 강조</button>
     <button id="m-bubble"  onclick="setPresoMode('bubble')">💬 합계 말풍선</button>
     <button id="m-connect" onclick="setPresoMode('connect')">🔗 담보 연결</button>
     <span class="sep"></span>
@@ -461,6 +463,7 @@
     <span class="ci">행강조<input type="color" id="hlColor"     value="#ffe44d" oninput="applyPresoColors()"></span>
     <span class="ci">열강조<input type="color" id="colHlColor"  value="#38bdf8" oninput="applyPresoColors()"></span>
     <span class="ci">교차<input type="color" id="xHlColor"    value="#fb7185" oninput="applyPresoColors()"></span>
+    <span class="ci">칸색<input type="color" id="cellHlColor" value="#fde047" oninput="applyPresoColors()"></span>
     <span class="ci">연결선<input type="color" id="connColor"   value="#ff5a5f" oninput="applyPresoColors()"></span>
     <span class="ci">말풍선<input type="color" id="bubbleColor" value="#111827" oninput="applyPresoColors()"></span>
     <span class="ci">헤더<input type="color" id="pHeadBg"       value="#3182f6" oninput="applyPresoColors()"></span>
@@ -1557,13 +1560,23 @@ function onTableContextMenu(e){
   const dataCols=cols.filter(c=>c>0);
   const finalCols=dataCols.length?dataCols:[clicked];
   const colName = cell.textContent.trim().slice(0,14);
-  buildAndShowCtx(e.clientX, e.clientY, finalCols, colName);
+  // 행(가로) — 선택했으면 선택 행들, 아니면 클릭한 행
+  let rowsIdx;
+  if(selCells.size) rowsIdx=[...new Set([...selCells].map(c=>cellRC(c).r))].filter(r=>r>0);
+  else { const rr=cellRC(cell).r; rowsIdx = rr>0 ? [rr] : []; }
+  buildAndShowCtx(e.clientX, e.clientY, finalCols, colName, rowsIdx, cell.textContent.trim().slice(0,12));
 }
-function buildAndShowCtx(x,y,cols,colName){
+function buildAndShowCtx(x,y,cols,colName,rowsIdx,rowName){
   const tbl=document.getElementById('tbl'); if(!tbl) return;
   const ncol=tbl.tHead.rows[0].cells.length;
   const dataCount=ncol-1;
   const items=[];
+  // 0) 행 감추기(가로 담보 항목 숨기기)
+  if(rowsIdx && rowsIdx.length){
+    const rowTag = rowsIdx.length===1 ? (rowName?` (${rowName})`:'') : ` (${rowsIdx.length}행)`;
+    items.push({label:`🙈 이 행 감추기${rowTag}`, fn:()=>ctxHideRows(rowsIdx)});
+    items.push('sep');
+  }
   // 1) 클릭한 "이 열" 하나만 (가장 흔한 요구)
   const oneTag = cols.length===1 ? (colName?` (${colName})`:'') : ` (${cols.length}열)`;
   items.push({label:`📁 이 열만 접기${oneTag}`, fn:()=>ctxCollapseCols(cols)});
@@ -1628,6 +1641,11 @@ function ctxShowOnlyCols(cols){
   afterCtxColChange();
 }
 function ctxCollapseCols(cols){ freezeGeometry(); cols.forEach(c=>{ if(c>0) colHidden[c]=true; }); afterCtxColChange(); }
+function ctxHideRows(rowsIdx){
+  const er=editRows();
+  rowsIdx.forEach(r=>{ const tr=er[r]; if(tr) tr.classList.add('hidden-row'); });
+  refreshControls(); scheduleAutosave();
+}
 document.getElementById('tableWrap').addEventListener('contextmenu', onTableContextMenu);
 document.addEventListener('click', e=>{ if(!e.target.closest('#ctxMenu')) hideCtx(); });
 document.addEventListener('scroll', hideCtx, true);
@@ -1637,13 +1655,13 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideCtx(); });
    🎬 발표(프레젠테이션) 모드
    ========================================================== */
 const SVGNS = 'http://www.w3.org/2000/svg';
-const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false };
+const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false };
 
 /* ---------- 발표 모드 실행취소/다시실행 ---------- */
 let presoHist=[], presoIdx=-1, _presoRestoring=false, _presoHistT=null;
 function presoSnapshot(){
   return JSON.stringify({
-    rowHL:[...preso.rowHL], colHL:[...preso.colHL], chain:[...preso.chain],
+    rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL], chain:[...preso.chain],
     dim:preso.dim, sumOn:preso.sumOn,
     bubbles:[...preso.bubbles.entries()].map(([k,el])=>[k, el.innerHTML])
   });
@@ -1664,14 +1682,14 @@ function updatePresoUndo(){
 function restorePresoState(s){
   _presoRestoring=true;
   const st=JSON.parse(s);
-  preso.rowHL=new Set(st.rowHL); preso.colHL=new Set(st.colHL); preso.chain=st.chain.slice();
+  preso.rowHL=new Set(st.rowHL); preso.colHL=new Set(st.colHL); preso.cellHL=new Set(st.cellHL||[]); preso.chain=st.chain.slice();
   preso.dim=st.dim; document.getElementById('m-dim').classList.toggle('active', preso.dim);
   preso.bubbles.forEach(b=>b.remove()); preso.bubbles.clear();
   const layer=document.querySelector('.bubbleLayer');
   st.bubbles.forEach(([k,html])=>{ const b=document.createElement('div'); b.className='bubble'; b.contentEditable=true; b.innerHTML=html; b.addEventListener('input', schedulePresoHistory); layer.appendChild(b); preso.bubbles.set(k,b); positionBubble(k); });
   preso.sumOn=st.sumOn; document.getElementById('m-sum').classList.toggle('active', preso.sumOn);
   if(!preso.sumOn){ document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
-  applyHL(); applyDim(); drawConnections(); if(preso.sumOn) refreshSum();
+  applyHL(); applyCellHL(); applyDim(); drawConnections(); if(preso.sumOn) refreshSum();
   _presoRestoring=false; updatePresoUndo();
 }
 function presoUndo(){ if(presoIdx>0){ presoIdx--; restorePresoState(presoHist[presoIdx]); } }
@@ -1692,35 +1710,37 @@ function getVisibleGrid(){
   const rowsAll = [tbl.tHead.rows[0], ...tbl.tBodies[0].rows];
   const ncol = tbl.tHead.rows[0].cells.length;
 
-  // 병합 정보 수집
-  const spanAt={}, coveredBy={};
-  rowsAll.forEach((tr,r)=>{ [...tr.cells].forEach((cell,c)=>{
-    if(!cell.classList.contains('merged-hidden') && (cell.colSpan>1||cell.rowSpan>1)){
-      spanAt[r+','+c]={cs:cell.colSpan, rs:cell.rowSpan};
-      for(let rr=r;rr<r+cell.rowSpan;rr++) for(let cc=c;cc<c+cell.colSpan;cc++){ if(rr!==r||cc!==c) coveredBy[rr+','+cc]=r+','+c; }
-    }
-  });});
-
   const colVis=[]; for(let c=0;c<ncol;c++) colVis[c]=!colHidden[c];
   const rowVis=rowsAll.map((tr,r)=> r===0 ? true : !tr.classList.contains('hidden-row'));
-
-  // 일부가 숨겨진 병합은 해제하여 처리(레이아웃 안전)
-  Object.keys(spanAt).forEach(k=>{
-    const [r,c]=k.split(',').map(Number), {cs,rs}=spanAt[k]; let ok=true;
-    for(let rr=r;rr<r+rs&&ok;rr++) for(let cc=c;cc<c+cs&&ok;cc++){ if(!rowVis[rr]||!colVis[cc]) ok=false; }
-    if(!ok){ delete spanAt[k]; for(let rr=r;rr<r+rs;rr++) for(let cc=c;cc<c+cs;cc++){ if(coveredBy[rr+','+cc]===k) delete coveredBy[rr+','+cc]; } }
-  });
-
   const visCols=[]; for(let c=0;c<ncol;c++) if(colVis[c]) visCols.push(c);
   const colNew={}; visCols.forEach((c,i)=> colNew[c]=i);
 
-  // 헤더
+  // 병합을 "해제"하지 않고 "재배치": 숨긴 행/열을 뺀 보이는 칸 기준으로 앵커를 옮기고 span을 보정
+  const emitAt={};        // "r,c"(보이는 앵커 위치) -> {cs, rs, src}
+  const skip=new Set();   // 건너뛸 원본 위치(병합에 가려지거나 완전히 숨겨짐)
+  rowsAll.forEach((tr,r)=>{
+    [...tr.cells].forEach((cell,c)=>{
+      if(cell.classList.contains('merged-hidden')){ skip.add(r+','+c); return; }
+      const cs=cell.colSpan||1, rs=cell.rowSpan||1;
+      if(cs>1 || rs>1){
+        const vcols=[]; for(let cc=c;cc<c+cs;cc++) if(colVis[cc]) vcols.push(cc);
+        const vrows=[]; for(let rr=r;rr<r+rs;rr++) if(rowVis[rr]) vrows.push(rr);
+        if(vcols.length===0 || vrows.length===0){ skip.add(r+','+c); return; }
+        const ar=vrows[0], ac=vcols[0];
+        emitAt[ar+','+ac]={cs:vcols.length, rs:vrows.length, src:cell};
+        vrows.forEach(rr=> vcols.forEach(cc=>{ if(rr!==ar||cc!==ac) skip.add(rr+','+cc); }));
+        if(r!==ar || c!==ac) skip.add(r+','+c);
+      }
+    });
+  });
+
+  // 헤더(r=0)
   const head=[];
   visCols.forEach(c=>{
-    if(coveredBy['0,'+c]) return;
-    const cd=readPresoCD(rowsAll[0].cells[c]); cd.c=colNew[c];
-    const sp=spanAt['0,'+c]; if(sp) cd.cs=sp.cs;
-    head.push(cd);
+    const key='0,'+c, em=emitAt[key];
+    if(em){ const cd=readPresoCD(em.src); cd.c=colNew[c]; if(em.cs>1) cd.cs=em.cs; head.push(cd); }
+    else if(skip.has(key)){ /* 가려짐 */ }
+    else { const cd=readPresoCD(rowsAll[0].cells[c]); cd.c=colNew[c]; head.push(cd); }
   });
 
   // 본문
@@ -1729,10 +1749,10 @@ function getVisibleGrid(){
   visRowsIdx.forEach(r=>{
     const out=[];
     visCols.forEach(c=>{
-      if(coveredBy[r+','+c]) return;
-      const cd=readPresoCD(rowsAll[r].cells[c]); cd.c=colNew[c];
-      const sp=spanAt[r+','+c]; if(sp){ cd.cs=sp.cs; cd.rs=sp.rs; }
-      out.push(cd);
+      const key=r+','+c, em=emitAt[key];
+      if(em){ const cd=readPresoCD(em.src); cd.c=colNew[c]; if(em.cs>1) cd.cs=em.cs; if(em.rs>1) cd.rs=em.rs; out.push(cd); }
+      else if(skip.has(key)){ /* 가려짐 */ }
+      else { const cd=readPresoCD(rowsAll[r].cells[c]); cd.c=colNew[c]; out.push(cd); }
     });
     rows.push(out);
   });
@@ -1793,7 +1813,7 @@ function enterPreso(){
   const newTbl = buildPresoTable(grid);
   stage.insertBefore(newTbl, stage.firstChild);
 
-  preso.rowHL.clear(); preso.colHL.clear(); preso.chain=[]; preso.bubbles.clear(); preso.dim=false;
+  preso.rowHL.clear(); preso.colHL.clear(); preso.cellHL.clear(); preso.chain=[]; preso.bubbles.clear(); preso.dim=false;
   stage.classList.remove('dim');
   stage.querySelector('.bubbleLayer').innerHTML='';
   document.querySelector('.connLayer').innerHTML='';
@@ -1821,7 +1841,7 @@ function exitPreso(){ document.getElementById('preso').classList.remove('on'); }
 
 function setPresoMode(m){
   preso.mode = m;
-  ['rowhl','colhl','bubble','connect'].forEach(k=>
+  ['rowhl','colhl','cellhl','bubble','connect'].forEach(k=>
     document.getElementById('m-'+k).classList.toggle('active', k===m));
 }
 
@@ -1841,6 +1861,15 @@ window.addEventListener('resize', ()=>{ if(document.getElementById('preso').clas
 
 function presoDown(e){
   const cell = e.target.closest('td,th'); if(!cell) return;
+  // ⋮(행 핸들)·⋯(열 핸들)은 모드와 무관하게 그 줄 전체를 강조
+  if(cell.classList.contains('rhandle')){
+    const r=rowOf(cell); if(r==null) return;
+    const val=!preso.rowHL.has(r); preso.painting={type:'row',val}; setRowHL(r,val); e.preventDefault(); return;
+  }
+  if(cell.classList.contains('chandle')){
+    const c=colOf(cell); if(c==null) return;
+    const val=!preso.colHL.has(c); preso.painting={type:'col',val}; setColHL(c,val); e.preventDefault(); return;
+  }
   if(preso.mode==='rowhl'){
     const r = rowOf(cell); if(r==null) return;
     const val = !preso.rowHL.has(r);
@@ -1851,13 +1880,19 @@ function presoDown(e){
     const val = !preso.colHL.has(c);
     preso.painting = {type:'col', val};
     setColHL(c, val); e.preventDefault();
+  } else if(preso.mode==='cellhl'){
+    const r=rowOf(cell), c=colOf(cell); if(r==null||c==null) return;
+    const val = !preso.cellHL.has(r+','+c);
+    preso.painting = {type:'cell', val};
+    setCellHL(r,c,val); e.preventDefault();
   }
 }
 function presoOver(e){
   if(!preso.painting) return;
   const cell = e.target.closest('td,th'); if(!cell) return;
   if(preso.painting.type==='row'){ const r=rowOf(cell); if(r!=null) setRowHL(r, preso.painting.val); }
-  else { const c=colOf(cell); if(c!=null) setColHL(c, preso.painting.val); }
+  else if(preso.painting.type==='col'){ const c=colOf(cell); if(c!=null) setColHL(c, preso.painting.val); }
+  else if(preso.painting.type==='cell'){ const r=rowOf(cell),c=colOf(cell); if(r!=null&&c!=null) setCellHL(r,c, preso.painting.val); }
 }
 function presoClick(e){
   const cell = e.target.closest('td[data-col]'); if(!cell) return;
@@ -1869,6 +1904,10 @@ function presoClick(e){
 /* ---------- 형광펜 ---------- */
 function setRowHL(r,val){ val?preso.rowHL.add(r):preso.rowHL.delete(r); applyHL(); applyDim(); }
 function setColHL(c,val){ val?preso.colHL.add(c):preso.colHL.delete(c); applyHL(); }
+function setCellHL(r,c,val){ const k=r+','+c; val?preso.cellHL.add(k):preso.cellHL.delete(k); const cell=getCell(r,c); if(cell) cell.classList.toggle('cellhl',val); schedulePresoHistory(); }
+function applyCellHL(){ const tbl=document.getElementById('presoTable'); if(!tbl) return;
+  tbl.querySelectorAll('td.cellhl').forEach(td=>td.classList.remove('cellhl'));
+  preso.cellHL.forEach(k=>{ const [r,c]=k.split(','); const cell=getCell(r,c); if(cell) cell.classList.add('cellhl'); }); }
 function applyHL(){
   const tbl = document.getElementById('presoTable'); if(!tbl) return;
   tbl.querySelectorAll('td[data-col], th[data-col]:not(.chandle)').forEach(cell=>{
@@ -2040,11 +2079,15 @@ function drawConnections(){
   svg.setAttribute('height', stage.offsetHeight);
   svg.innerHTML = '';
   const sr = stage.getBoundingClientRect();
-  // 담보명(첫 열) 왼쪽 가장자리를 기준점으로 → 연결선이 왼쪽 여백으로 휘어 데이터와 겹치지 않음
+  const tblEl = document.getElementById('presoTable');
+  const tblLeft = tblEl ? tblEl.getBoundingClientRect().left - sr.left : 0;
+  // 표 왼쪽 가장자리를 공통 기준점으로(병합/rowspan으로 첫 열 칸이 없어도 안전) → 3·4개 이상도 연결
   const pts = preso.chain.map(r=>{
-    const cell = getCell(r,0); const cr = cell.getBoundingClientRect();
-    return { x: cr.left - sr.left, y: cr.top - sr.top + cr.height/2 };
-  });
+    const cell = getCell(r,0) || document.querySelector(`#presoTable td[data-row="${r}"]`);
+    if(!cell) return null;
+    const cr = cell.getBoundingClientRect();
+    return { x: tblLeft + 6, y: cr.top - sr.top + cr.height/2 };
+  }).filter(Boolean);
   for(let i=0;i<pts.length-1;i++){
     const a=pts[i], b=pts[i+1];
     const dx = Math.max(50, Math.abs(b.y-a.y)*0.45);
@@ -2073,6 +2116,7 @@ function applyPresoColors(){
   R.setProperty('--hlColor',     g('hlColor'));
   R.setProperty('--colHlColor',  g('colHlColor'));
   R.setProperty('--xHlColor',    g('xHlColor'));
+  R.setProperty('--cellHlColor', g('cellHlColor'));
   R.setProperty('--connColor',   g('connColor'));
   R.setProperty('--bubbleColor', g('bubbleColor'));
   R.setProperty('--pHeadBg',     g('pHeadBg'));
@@ -2083,9 +2127,9 @@ function applyPresoColors(){
 
 /* ---------- 효과 지우기 ---------- */
 function clearEffects(){
-  preso.rowHL.clear(); preso.colHL.clear(); preso.chain=[];
+  preso.rowHL.clear(); preso.colHL.clear(); preso.cellHL.clear(); preso.chain=[];
   preso.bubbles.forEach(b=> b.remove()); preso.bubbles.clear();
-  applyHL(); applyDim(); drawConnections(); schedulePresoHistory();
+  applyHL(); applyCellHL(); applyDim(); drawConnections(); schedulePresoHistory();
 }
 
 /* ---------- 발표 화면 이미지 저장 ---------- */
