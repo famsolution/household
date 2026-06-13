@@ -1328,11 +1328,22 @@ function populateGroupRowSelects(){
   jungR.value = (keep.jung && [...jungR.options].some(o=>o.value===keep.jung)) ? keep.jung : defJung;
   refreshDaeOptions();
 }
-/* 항목(고정) 열 다음, 실제 묶음(병합)이 시작되는 첫 열 */
+/* 서로 다른 묶음이 2개 이상인 행(=그룹 머리행) */
+function isGroupRow(key){ return new Set(effValsForRow(key).slice(1).filter(Boolean)).size >= 2; }
+/* 그 행에 병합(colspan>1)된 머리 셀이 있는가 = 계층형 그룹 행 */
+function isMergedHeaderRow(key){ return rowCellsByKey(key).some(c=>c.colSpan>1 && !c.classList.contains('merged-hidden')); }
+/* 항목(고정) 열 다음, 실제 묶음이 시작되는 첫 열 — 제목(전체덮음) 행은 제외하고 실제 그룹행 기준 */
 function firstGroupCol(){
-  const cells=rowCellsByKey(document.getElementById('daeRow').value);
-  for(let c=1;c<cells.length;c++){ if(cells[c].colSpan>1 || cells[c].classList.contains('merged-hidden')) return c; }
-  return 1;
+  let best=Infinity;
+  editRows().forEach((tr,r)=>{
+    const key = r===0 ? 'head' : String(r-1);
+    if(!(isMergedHeaderRow(key) && isGroupRow(key))) return;
+    for(let c=1;c<tr.cells.length;c++){
+      const cell=tr.cells[c];
+      if(cell.colSpan>1 || cell.classList.contains('merged-hidden')){ best=Math.min(best,c); break; }
+    }
+  });
+  return best===Infinity ? 1 : best;
 }
 function refreshDaeOptions(){
   const vals=effValsForRow(document.getElementById('daeRow').value);
@@ -1424,15 +1435,27 @@ function onTableContextMenu(e){
   buildAndShowCtx(e.clientX, e.clientY, dataCols.length?dataCols:[clicked]);
 }
 function buildAndShowCtx(x,y,cols){
-  const daeVals=effValsForRow(document.getElementById('daeRow').value);
-  const dae=[...new Set(cols.map(c=>daeVals[c]).filter(Boolean))];
-  const items=[];
-  if(dae.length){
-    items.push({h:'대분류: '+dae.join(', ')});
-    items.push({label:'✅ 이 대분류만 보기', fn:()=>ctxShowOnlyDae(dae)});
-    items.push({label:'📁 이 대분류 접기', fn:()=>ctxCollapseDae(dae)});
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  const ncol=tbl.tHead.rows[0].cells.length;
+  let dataCount=0; for(let c=1;c<ncol;c++) dataCount++;
+  // 계층형 그룹 머리행(병합 + 묶음 2개 이상)을 직접 찾아, 클릭한 열이 속한 묶음만 대상으로
+  const keys=['head']; for(let i=0;i<tbl.tBodies[0].rows.length;i++) keys.push(String(i));
+  const items=[]; const seen=new Set();
+  keys.forEach(key=>{
+    if(!isMergedHeaderRow(key) || !isGroupRow(key)) return;   // 제목(전체덮음)·데이터·금액행 제외
+    const v=effValsForRow(key);
+    const gvals=[...new Set(cols.map(c=>v[c]).filter(Boolean))];
+    if(!gvals.length) return;
+    const set=new Set(gvals);
+    const gcols=[]; for(let c=1;c<ncol;c++) if(set.has(v[c])) gcols.push(c);
+    if(gcols.length===0 || gcols.length>=dataCount) return;    // 전체를 덮는 묶음은 제외(전부 접힘 방지)
+    const label=gvals.join(', ');
+    if(seen.has(label)) return; seen.add(label);
+    items.push({h:'묶음: '+label+` (${gcols.length}열)`});
+    items.push({label:'✅ 이 묶음만 보기', fn:()=>ctxShowOnlyCols(gcols)});
+    items.push({label:'📁 이 묶음 접기', fn:()=>ctxCollapseCols(gcols)});
     items.push('sep');
-  }
+  });
   items.push({label:'✅ 선택한 열만 보기', fn:()=>ctxShowOnlyCols(cols)});
   items.push({label:'📁 선택한 열 접기', fn:()=>ctxCollapseCols(cols)});
   items.push('sep');
