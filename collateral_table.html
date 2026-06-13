@@ -647,9 +647,8 @@ function buildTableModel(m){
   decorateGrips(); applySelModeState(); clearSel();
   refreshControls(); applyStyle();
   populateGroupRowSelects();          // 대분류·중분류 머리행 먼저 결정
-  const idxs=headerRowEditIndices();
-  if(m.mergeSpec) mergeSpec = m.mergeSpec.filter(g=>idxs.has(g.r)).map(g=>({...g})); else captureMergeSpec();
-  applyColVisibility();               // 머리행 병합만 재배치(데이터 병합은 그대로)
+  if(m.mergeSpec) mergeSpec = m.mergeSpec.map(g=>({...g})); else captureMergeSpec();
+  applyColVisibility();               // 감춘 열에 걸친 모든 병합을 남은 열로 재배치
   applyZoom();
   autosave();
 }
@@ -749,21 +748,10 @@ function applyColVisibility(){
 /* ===== 병합 머리글: 열을 감춰도 묶음 이름이 남은 열 위에 유지되도록 ===== */
 let mergeSpec=[];
 function stripGripsHTML(cell){ const cl=cell.cloneNode(true); cl.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove()); return cl.innerHTML; }
-/* 재배치 대상이 되는 "머리행"(제목·대분류·중분류)의 editRows 인덱스 집합 — 데이터 영역 병합은 제외 */
-function headerRowEditIndices(){
-  const k2i = k => k==='head' ? 0 : (+k+1);
-  const dae=document.getElementById('daeRow')?.value, jung=document.getElementById('jungRow')?.value;
-  const s=new Set([0]);
-  if(dae) s.add(k2i(dae));
-  if(jung) s.add(k2i(jung));
-  return s;
-}
 function captureMergeSpec(){
   const tbl=document.getElementById('tbl'); mergeSpec=[]; if(!tbl) return;
   const rows=[tbl.tHead.rows[0], ...tbl.tBodies[0].rows];
-  const idxs=headerRowEditIndices();
   rows.forEach((tr,r)=>{
-    if(!idxs.has(r)) return;          // 머리행만 캡처(데이터 병합은 건드리지 않음)
     [...tr.cells].forEach((cell,c)=>{
       if(!cell.classList.contains('merged-hidden') && cell.colSpan>1){
         mergeSpec.push({r,c,cs:cell.colSpan,rs:cell.rowSpan||1,html:stripGripsHTML(cell)});
