@@ -636,6 +636,12 @@ function buildTableModel(m){
   });
   tbl.appendChild(tbody);
 
+  // 전체 열을 덮는 제목칸의 고정 너비는 제거(표 전체 폭이 옛 픽셀값에 묶여 감춘 뒤 빈 공간이 생기는 것 방지)
+  const ncol0 = m.head.length;
+  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>[...tr.cells].forEach(cell=>{
+    if(cell.colSpan>=ncol0 && cell.style.width) cell.style.width='';
+  }));
+
   const wrap = document.getElementById('tableWrap');
   wrap.innerHTML = ''; wrap.appendChild(tbl);
 
