@@ -326,8 +326,12 @@
       <input type="color" id="headFg" value="#ffffff" oninput="applyStyle()"></div></div>
     <div class="opt">테두리 색
       <input type="color" id="cellLine" value="#c9ced6" oninput="applyStyle()"></div>
-    <div class="opt">표 선 두께 <span id="vBw">1px</span> <span style="opacity:.7;">(0=투명)</span>
-      <input type="range" id="borderW" min="0" max="8" step="0.5" value="1" oninput="applyStyle()"></div>
+    <div class="opt">표 선 두께 (0=투명)
+      <div class="opt-row">
+        <input type="range" id="borderW" min="0" max="20" step="0.5" value="1" oninput="syncBW('range')">
+        <input type="number" id="borderWNum" min="0" max="20" step="0.5" value="1" oninput="syncBW('num')"
+          style="width:58px; padding:5px 7px; border:1px solid var(--line); border-radius:8px;"> px
+      </div></div>
     <div class="opt"> &nbsp;
       <label class="switch"><input type="checkbox" id="wrap" onchange="applyStyle()"> 긴 글자 줄바꿈 허용</label></div>
     <div class="opt">표 라인
@@ -402,8 +406,11 @@
         <option value="right">오른쪽</option>
       </select></span>
     <span class="ci">선색<input type="color" id="bdColor" value="#c9ced6"></span>
-    <span class="ci">선 두께 <span id="vBdW">1px</span>
-      <input type="range" id="bdW" min="0" max="8" step="0.5" value="1" oninput="applyCellBorder()"></span>
+    <span class="ci">선 두께
+      <input type="range" id="bdW" min="0" max="20" step="0.5" value="1" oninput="syncBdW('range')">
+      <input type="number" id="bdWNum" min="0" max="20" step="0.5" value="1" oninput="syncBdW('num')"
+        style="width:50px; padding:4px 6px; border:1px solid var(--line); border-radius:7px;">
+      <span id="vBdW" style="color:#e54848;"></span></span>
     <button class="btn-ghost" onclick="applyCellBorder(true)">선 적용</button>
     <button class="btn-ghost" onclick="resetCellBorder()">선 기본값</button>
     <span class="vsep"></span>
@@ -840,9 +847,22 @@ function bdSidesOf(side){
   if(side==='v')   return ['Left','Right'];
   return [{top:'Top',bottom:'Bottom',left:'Left',right:'Right'}[side]];
 }
+function syncBW(src){
+  const r=document.getElementById('borderW'), n=document.getElementById('borderWNum');
+  if(src==='num'){ let v=parseFloat(n.value); if(isNaN(v))v=0; v=Math.max(0,Math.min(20,v)); r.value=v; }
+  else { n.value=r.value; }
+  applyStyle();
+}
+function syncBdW(src){
+  const r=document.getElementById('bdW'), n=document.getElementById('bdWNum');
+  if(src==='num'){ let v=parseFloat(n.value); if(isNaN(v))v=0; v=Math.max(0,Math.min(20,v)); r.value=v; }
+  else { n.value=r.value; }
+  applyCellBorder();
+}
 function applyCellBorder(fromButton){
   const w = +document.getElementById('bdW').value;
-  document.getElementById('vBdW').textContent = w+'px'+(w===0?' (투명)':'');
+  document.getElementById('bdWNum').value = w;
+  document.getElementById('vBdW').textContent = w===0 ? '(투명)' : '';
   if(!selCells.size){ if(fromButton) alert('먼저 테두리를 바꿀 셀을 선택하세요.'); return; }
   const sides = bdSidesOf(document.getElementById('bdSide').value);
   const col = document.getElementById('bdColor').value;
@@ -947,7 +967,7 @@ function applyStyle(){
   r.setProperty('--cellLine', document.getElementById('cellLine').value);
   const bw = document.getElementById('borderW').value;
   r.setProperty('--cellBorderW', bw+'px');
-  document.getElementById('vBw').textContent = bw+'px';
+  document.getElementById('borderWNum').value = bw;
   document.getElementById('vFont').textContent=f+'px';
   document.getElementById('vPh').textContent=ph+'px';
   document.getElementById('vPv').textContent=pv+'px';
