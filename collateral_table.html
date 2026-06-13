@@ -105,6 +105,9 @@
   #tbl th, #tbl td{position:relative;}
   .merged-hidden{display:none;}
   .wrapcol{white-space:normal !important; word-break:break-all;}
+  /* 가로/세로 표 라인 전체 감추기(셀별 인라인 테두리는 그대로 유지) */
+  table.no-hlines th, table.no-hlines td{border-top-width:0; border-bottom-width:0;}
+  table.no-vlines th, table.no-vlines td{border-left-width:0; border-right-width:0;}
   .col-grip{position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:6; user-select:none;}
   .row-grip{position:absolute; left:0; bottom:-3px; width:100%; height:7px; cursor:row-resize; z-index:6; user-select:none;}
   .col-grip:hover, .row-grip:hover{background:rgba(49,130,246,.45);}
@@ -311,7 +314,36 @@
       <input type="range" id="borderW" min="0" max="8" step="0.5" value="1" oninput="applyStyle()"></div>
     <div class="opt"> &nbsp;
       <label class="switch"><input type="checkbox" id="wrap" onchange="applyStyle()"> 긴 글자 줄바꿈 허용</label></div>
+    <div class="opt">표 라인
+      <div class="opt-row">
+        <label class="switch"><input type="checkbox" id="hLines" checked onchange="applyStyle()"> 가로선</label>
+        <label class="switch"><input type="checkbox" id="vLines" checked onchange="applyStyle()"> 세로선</label>
+      </div></div>
   </div>
+</div>
+
+<!-- 3.5 특약(대분류·중분류) 골라 보기 -->
+<div class="card" id="groupCard" style="display:none;">
+  <h2>🧩 특약 골라 보기 — 대분류·중분류 선택, 빈 가로행 자동 숨김</h2>
+  <div class="opts" style="margin-bottom:10px;">
+    <div class="opt">대분류가 적힌 행
+      <select id="daeRow" onchange="refreshDaeOptions()"></select></div>
+    <div class="opt">중분류가 적힌 행
+      <select id="jungRow" onchange="refreshJungOptions()"></select></div>
+    <button class="btn-ghost" onclick="populateGroupRowSelects()" style="align-self:flex-end;">↻ 행 목록 새로고침</button>
+  </div>
+  <div style="font-size:13px; font-weight:700; color:#4e5968; margin:6px 0 8px;">대분류 묶음 — 체크 해제하면 그 특약 묶음(여러 열)이 통째로 접힙니다</div>
+  <div class="chips" id="groupChips"></div>
+  <div class="opts" style="margin-top:14px;">
+    <div class="opt">대분류
+      <select id="daeSel" onchange="refreshJungOptions()" style="min-width:160px;"></select></div>
+    <div class="opt">중분류
+      <select id="jungSel" style="min-width:140px;"></select></div>
+    <label class="switch"><input type="checkbox" id="autoHideEmpty" checked> 빈 가로행 자동 숨기기</label>
+    <button class="btn-primary" onclick="applyGroup()">이 묶음만 보기</button>
+    <button class="btn-ghost" onclick="resetGroup()">전체 보기</button>
+  </div>
+  <p class="hint">예) <b>대분류</b>=암통합치료비, <b>중분류</b>=기본형 → 기본형(4천·8천·1억) 열만 표시되고, 값이 비어 있는 통합치료항목(가로행)은 자동으로 숨겨집니다. 이 상태로 <b>💼 고객용(발표) 파일로 저장</b>하면 그대로 발표 화면으로 열립니다.</p>
 </div>
 
 <!-- 4. 결과 표 + 저장 -->
@@ -556,9 +588,11 @@ function buildTableModel(m){
   document.getElementById('sheetCard').style.display = 'block';
   document.getElementById('visCard').style.display = 'block';
   document.getElementById('optCard').style.display = 'block';
+  document.getElementById('groupCard').style.display = 'block';
   document.getElementById('resultCard').style.display = 'block';
   decorateGrips(); applySelModeState(); clearSel();
   refreshControls(); applyStyle(); applyColVisibility();
+  populateGroupRowSelects();
   autosave();
 }
 
@@ -849,7 +883,12 @@ function applyStyle(){
   document.getElementById('vFont').textContent=f+'px';
   document.getElementById('vPh').textContent=ph+'px';
   document.getElementById('vPv').textContent=pv+'px';
-  document.getElementById('tbl')?.classList.toggle('wrap', document.getElementById('wrap').checked);
+  const tbl0=document.getElementById('tbl');
+  if(tbl0){
+    tbl0.classList.toggle('wrap', document.getElementById('wrap').checked);
+    tbl0.classList.toggle('no-hlines', !document.getElementById('hLines').checked);
+    tbl0.classList.toggle('no-vlines', !document.getElementById('vLines').checked);
+  }
   scheduleAutosave();
 }
 
@@ -1001,7 +1040,9 @@ function getStyleState(){
   const v=id=>document.getElementById(id).value;
   return {font:v('font'),padH:v('padH'),padV:v('padV'),align:v('align'),
           headBg:v('headBg'),headFg:v('headFg'),cellLine:v('cellLine'),borderW:v('borderW'),
-          wrap:document.getElementById('wrap').checked};
+          wrap:document.getElementById('wrap').checked,
+          hLines:document.getElementById('hLines').checked,
+          vLines:document.getElementById('vLines').checked};
 }
 function setStyleState(s){
   if(!s) return;
@@ -1009,6 +1050,8 @@ function setStyleState(s){
   set('font',s.font); set('padH',s.padH); set('padV',s.padV); set('align',s.align);
   set('headBg',s.headBg); set('headFg',s.headFg); set('cellLine',s.cellLine); set('borderW',s.borderW);
   document.getElementById('wrap').checked=!!s.wrap;
+  document.getElementById('hLines').checked = s.hLines!==false;   // 기본 표시
+  document.getElementById('vLines').checked = s.vLines!==false;
   applyStyle();
 }
 
@@ -1023,7 +1066,10 @@ function readCell(c){
   const clone=c.cloneNode(true);
   clone.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove());
   const d={h:clone.innerHTML};
-  if(c.style.cssText) d.style = c.style.cssText;   // 배경·글자·테두리·너비 등 인라인 전체 보존
+  if(c.style.cssText){   // 배경·글자·테두리·너비 등 인라인 보존(열 숨김 display는 colHidden이 관리)
+    const css=c.style.cssText.replace(/(?:^|;)\s*display\s*:[^;]*/gi,'');
+    if(css.trim()) d.style=css;
+  }
   if(c.colSpan>1) d.cs = c.colSpan;
   if(c.rowSpan>1) d.rs = c.rowSpan;
   if(c.classList.contains('merged-hidden')) d.mh = true;
@@ -1153,6 +1199,116 @@ window.addEventListener('DOMContentLoaded', ()=>{
     if(last){ deserialize(JSON.parse(last)); }
   }catch(e){}
 });
+
+/* ==========================================================
+   🧩 특약(대분류·중분류) 골라 보기 + 빈 가로행 자동 숨김
+   ========================================================== */
+function rowCellsByKey(key){
+  const tbl=document.getElementById('tbl'); if(!tbl) return [];
+  if(key==='head') return [...tbl.tHead.rows[0].cells];
+  const tr=tbl.tBodies[0].rows[+key]; return tr ? [...tr.cells] : [];
+}
+/* 가로 병합을 풀어 각 열의 "실제 표시값"을 구함(병합 셀은 왼쪽 앵커값 사용) */
+function effValsForRow(key){
+  const cells=rowCellsByKey(key); const vals=[]; let last='';
+  cells.forEach((cell,c)=>{
+    if(cell.classList.contains('merged-hidden')) vals[c]=last;
+    else { last=cell.textContent.trim(); vals[c]=last; }
+  });
+  return vals;
+}
+function rowLabel(key,cells){
+  const txt=cells.map(c=>c.textContent.trim()).filter(Boolean).slice(0,3).join(' / ');
+  return (key==='head'?'머리글행':(+key+1)+'행') + (txt?': '+txt.slice(0,28):'');
+}
+function populateGroupRowSelects(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  const daeR=document.getElementById('daeRow'), jungR=document.getElementById('jungRow');
+  const keep={dae:daeR.value, jung:jungR.value};
+  const opts=[['head',[...tbl.tHead.rows[0].cells]]];
+  [...tbl.tBodies[0].rows].forEach((tr,i)=> opts.push([String(i),[...tr.cells]]));
+  const fill=sel=>{ sel.innerHTML=''; opts.forEach(([k,cells])=>{ const o=document.createElement('option'); o.value=k; o.textContent=rowLabel(k,cells); sel.appendChild(o); }); };
+  fill(daeR); fill(jungR);
+  // 기본값: 병합(colspan>1)이 있는 행을 대분류·중분류로 추정
+  const mergeRows=opts.filter(([k,cells])=> cells.some(c=>c.colSpan>1 && !c.classList.contains('merged-hidden'))).map(([k])=>k);
+  daeR.value  = ([...daeR.options].some(o=>o.value===keep.dae)) ? keep.dae : (mergeRows[0]||'head');
+  jungR.value = ([...jungR.options].some(o=>o.value===keep.jung)) ? keep.jung : (mergeRows[1]||opts[1]?.[0]||'head');
+  refreshDaeOptions();
+}
+function refreshDaeOptions(){
+  const vals=effValsForRow(document.getElementById('daeRow').value);
+  const sel=document.getElementById('daeSel'); const keep=sel.value;
+  const uniq=[...new Set(vals.slice(1).filter(Boolean))];
+  sel.innerHTML=''; uniq.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+  if(uniq.includes(keep)) sel.value=keep;
+  refreshGroupChips(); refreshJungOptions();
+}
+function refreshJungOptions(){
+  const daeVals=effValsForRow(document.getElementById('daeRow').value);
+  const jungVals=effValsForRow(document.getElementById('jungRow').value);
+  const dae=document.getElementById('daeSel').value;
+  const sel=document.getElementById('jungSel'); const keep=sel.value;
+  const arr=[]; for(let c=1;c<daeVals.length;c++){ if(daeVals[c]===dae && jungVals[c]) arr.push(jungVals[c]); }
+  const uniq=[...new Set(arr)];
+  sel.innerHTML='<option value="">전체</option>';
+  uniq.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+  if([...sel.options].some(o=>o.value===keep)) sel.value=keep;
+}
+/* 대분류 묶음 칩: 체크 해제 시 그 대분류의 모든 열을 통째로 접기 */
+function refreshGroupChips(){
+  const box=document.getElementById('groupChips'); if(!box) return;
+  const vals=effValsForRow(document.getElementById('daeRow').value);
+  box.innerHTML='';
+  [...new Set(vals.slice(1).filter(Boolean))].forEach(v=>{
+    const cols=[]; for(let c=1;c<vals.length;c++) if(vals[c]===v) cols.push(c);
+    const shown=cols.some(c=>!colHidden[c]);
+    const chip=document.createElement('span'); chip.className='chip'+(shown?'':' off');
+    chip.innerHTML=`<label><input type="checkbox" ${shown?'checked':''}> ${escapeHtml(v)}</label>`;
+    chip.querySelector('input').onchange=e=>{
+      cols.forEach(c=> colHidden[c]=!e.target.checked);
+      applyColVisibility();
+      if(document.getElementById('autoHideEmpty').checked) autoHideEmptyRows();
+      chip.classList.toggle('off', !e.target.checked);
+      refreshControls();
+    };
+    box.appendChild(chip);
+  });
+}
+function applyGroup(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  const daeVals=effValsForRow(document.getElementById('daeRow').value);
+  const jungVals=effValsForRow(document.getElementById('jungRow').value);
+  const dae=document.getElementById('daeSel').value, jung=document.getElementById('jungSel').value;
+  if(!dae){ alert('대분류를 먼저 선택하세요.'); return; }
+  const ncol=tbl.tHead.rows[0].cells.length;
+  for(let c=0;c<ncol;c++){
+    const keep = (c===0) || (daeVals[c]===dae && (jung==='' || jungVals[c]===jung));
+    colHidden[c]=!keep;
+  }
+  applyColVisibility();
+  if(document.getElementById('autoHideEmpty').checked) autoHideEmptyRows();
+  refreshControls(); refreshGroupChips();
+}
+function resetGroup(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  colHidden = colHidden.map(()=>false);
+  [...tbl.tBodies[0].rows].forEach(tr=> tr.classList.remove('hidden-row'));
+  applyColVisibility(); refreshControls(); refreshGroupChips();
+}
+/* 표시 중인 열 기준으로 값이 모두 빈 가로행을 숨김(구분 머리행은 유지) */
+function autoHideEmptyRows(){
+  const tbl=document.getElementById('tbl'); if(!tbl) return;
+  const daeR=document.getElementById('daeRow').value, jungR=document.getElementById('jungRow').value;
+  [...tbl.tBodies[0].rows].forEach((tr,i)=>{
+    if(String(i)===daeR || String(i)===jungR){ tr.classList.remove('hidden-row'); return; }
+    let hasVal=false;
+    [...tr.cells].forEach((cell,c)=>{
+      if(c===0 || colHidden[c] || cell.classList.contains('merged-hidden')) return;
+      if(cell.textContent.trim()!=='') hasVal=true;
+    });
+    tr.classList.toggle('hidden-row', !hasVal);
+  });
+}
 
 /* ==========================================================
    🎬 발표(프레젠테이션) 모드
