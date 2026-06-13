@@ -339,6 +339,22 @@
     <button class="btn-ghost" onclick="mergeCells()">⬚ 셀 병합</button>
     <button class="btn-ghost" onclick="unmergeCells()">병합 해제</button>
     <button class="btn-ghost" onclick="clearFmt()">서식 지우기</button>
+    <span class="vsep"></span>
+    <span class="ci">선 위치
+      <select id="bdSide">
+        <option value="all">전체</option>
+        <option value="h">가로(위·아래)</option>
+        <option value="v">세로(좌·우)</option>
+        <option value="top">위</option>
+        <option value="bottom">아래</option>
+        <option value="left">왼쪽</option>
+        <option value="right">오른쪽</option>
+      </select></span>
+    <span class="ci">선색<input type="color" id="bdColor" value="#c9ced6"></span>
+    <span class="ci">선 두께 <span id="vBdW">1px</span>
+      <input type="range" id="bdW" min="0" max="8" step="0.5" value="1" oninput="applyCellBorder()"></span>
+    <button class="btn-ghost" onclick="applyCellBorder(true)">선 적용</button>
+    <button class="btn-ghost" onclick="resetCellBorder()">선 기본값</button>
     <span id="fmtInfo" class="hint" style="margin:0;"></span>
   </div>
   <div id="tableWrap"></div>
@@ -492,6 +508,7 @@ function makeCell(tag, cd){
   const e = document.createElement(tag);
   e.contentEditable = 'true';
   e.innerHTML = cd.h!=null ? cd.h : textToHtml(cd.text||'');
+  if(cd.style) e.style.cssText = cd.style;   // 저장본 복원(테두리·배경·글자 등 인라인 전체)
   if(cd.bg) e.style.background = cd.bg;
   if(cd.fg) e.style.color = cd.fg;
   if(cd.fs) e.style.fontSize = cd.fs;
@@ -748,6 +765,36 @@ function clearFmt(){
   selCells.forEach(c=>{ c.style.background=''; c.style.color=''; c.style.fontSize=''; c.style.fontWeight=''; c.style.textAlign=''; });
   scheduleAutosave();
 }
+
+/* 선택한 셀의 특정 변(위/아래/좌/우/가로/세로/전체) 테두리를 두껍게~투명(0)으로 */
+function bdSidesOf(side){
+  if(side==='all') return ['Top','Right','Bottom','Left'];
+  if(side==='h')   return ['Top','Bottom'];
+  if(side==='v')   return ['Left','Right'];
+  return [{top:'Top',bottom:'Bottom',left:'Left',right:'Right'}[side]];
+}
+function applyCellBorder(fromButton){
+  const w = +document.getElementById('bdW').value;
+  document.getElementById('vBdW').textContent = w+'px'+(w===0?' (투명)':'');
+  if(!selCells.size){ if(fromButton) alert('먼저 테두리를 바꿀 셀을 선택하세요.'); return; }
+  const sides = bdSidesOf(document.getElementById('bdSide').value);
+  const col = document.getElementById('bdColor').value;
+  selCells.forEach(c=> sides.forEach(S=>{
+    if(w===0){                                   // border-style:hidden → 병합 테두리에서 항상 이김(완전 투명)
+      c.style['border'+S+'Style']='hidden'; c.style['border'+S+'Width']='0';
+    } else {
+      c.style['border'+S+'Style']='solid'; c.style['border'+S+'Width']=w+'px'; c.style['border'+S+'Color']=col;
+    }
+  }));
+  scheduleAutosave();
+}
+function resetCellBorder(){
+  if(!selCells.size){ alert('먼저 셀을 선택하세요.'); return; }
+  selCells.forEach(c=> ['Top','Right','Bottom','Left'].forEach(S=>{
+    c.style['border'+S+'Style']=''; c.style['border'+S+'Width']=''; c.style['border'+S+'Color']='';
+  }));
+  scheduleAutosave();
+}
 function selBox(){
   let r1=Infinity,r2=-1,c1=Infinity,c2=-1;
   selCells.forEach(cell=>{ const{r,c}=cellRC(cell); r1=Math.min(r1,r); r2=Math.max(r2,r); c1=Math.min(c1,c); c2=Math.max(c2,c); });
@@ -976,17 +1023,11 @@ function readCell(c){
   const clone=c.cloneNode(true);
   clone.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove());
   const d={h:clone.innerHTML};
-  const st=c.style;
-  if(st.background||st.backgroundColor) d.bg = st.background||st.backgroundColor;
-  if(st.color) d.fg = st.color;
-  if(st.fontSize) d.fs = st.fontSize;
-  if(st.fontWeight==='700'||st.fontWeight==='bold') d.fw = 700;
-  if(st.textAlign) d.al = st.textAlign;
+  if(c.style.cssText) d.style = c.style.cssText;   // 배경·글자·테두리·너비 등 인라인 전체 보존
   if(c.colSpan>1) d.cs = c.colSpan;
   if(c.rowSpan>1) d.rs = c.rowSpan;
   if(c.classList.contains('merged-hidden')) d.mh = true;
   if(c.classList.contains('wrapcol')) d.wrap = true;
-  if(c.tagName==='TH' && c.style.width) d.w = c.style.width;
   return d;
 }
 function serialize(){
@@ -1124,11 +1165,8 @@ function readPresoCD(cell){
   const clone=cell.cloneNode(true);
   clone.querySelectorAll('.col-grip,.row-grip').forEach(g=>g.remove());
   const d={ h:clone.innerHTML, text:cell.textContent.trim() };
-  const st=cell.style;
-  if(st.background||st.backgroundColor) d.bg=st.background||st.backgroundColor;
-  if(st.color) d.fg=st.color;
-  if(st.fontWeight==='700'||st.fontWeight==='bold') d.fw=700;
-  if(st.textAlign) d.al=st.textAlign;
+  let css=cell.style.cssText;   // 글자크기·너비·높이는 발표(슬라이더/자동)에 맡기고 제외
+  if(css){ css=css.replace(/(?:^|;)\s*(font-size|width|height)\s*:[^;]*/gi,''); if(css.trim()) d.style=css; }
   return d;
 }
 /* 현재 편집표에서 "보이는" 담보/열만 추려서 발표용 격자 생성(병합·색 보존) */
@@ -1185,10 +1223,7 @@ function getVisibleGrid(){
 }
 
 function applyPresoCellStyle(e,cd){
-  if(cd.bg) e.style.background=cd.bg;
-  if(cd.fg) e.style.color=cd.fg;
-  if(cd.fw) e.style.fontWeight=cd.fw;
-  if(cd.al) e.style.textAlign=cd.al;
+  if(cd.style) e.style.cssText = cd.style;
 }
 function buildPresoTable(grid){
   const tbl = document.createElement('table'); tbl.id = 'presoTable';
