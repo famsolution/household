@@ -166,7 +166,7 @@
   #presoHint{position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:1100;
     color:rgba(255,255,255,.8); font-size:13px; background:rgba(0,0,0,.35); padding:8px 14px; border-radius:999px;}
 
-  #presoStage{display:inline-block; position:relative; margin:96px 56px 40px; padding-left:70px; user-select:none;}
+  #presoStage{display:inline-block; position:relative; margin:120px 56px 40px; padding-left:70px; user-select:none;}
   #presoStage.capture .handle-row, #presoStage.capture .rhandle,
   #presoStage.capture .corner, #presoStage.capture .rhandle-corner{visibility:hidden;}
 
@@ -1809,7 +1809,13 @@ function enterPreso(){
   setPresoMode('rowhl');
   applyPresoColors();
   document.getElementById('preso').classList.add('on');
+  adjustPresoLayout();   // 상단 바 높이에 맞춰 표를 그 아래로 내림(바가 표를 가리지 않게)
   presoHist=[]; presoIdx=-1; _presoRestoring=false; pushPresoHistory();   // 발표 모드 되돌리기 기준점
+}
+/* 상단 바(여러 줄로 늘어날 수 있음)가 표를 가리지 않도록 표 시작 위치를 바 높이에 맞춤 */
+function adjustPresoLayout(){
+  const bar=document.getElementById('presoBar'), stage=document.getElementById('presoStage');
+  if(bar && stage){ stage.style.marginTop = Math.max(110, bar.offsetHeight + 30) + 'px'; }
 }
 function exitPreso(){ document.getElementById('preso').classList.remove('on'); }
 
@@ -1831,7 +1837,7 @@ function bindPresoEvents(tbl){
   tbl.addEventListener('click', presoClick);
 }
 window.addEventListener('pointerup', ()=>{ preso.painting=null; });
-window.addEventListener('resize', ()=>{ if(document.getElementById('preso').classList.contains('on')) repositionAll(); });
+window.addEventListener('resize', ()=>{ if(document.getElementById('preso').classList.contains('on')){ adjustPresoLayout(); repositionAll(); } });
 
 function presoDown(e){
   const cell = e.target.closest('td,th'); if(!cell) return;
