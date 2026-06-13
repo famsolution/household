@@ -192,8 +192,8 @@
     mix-blend-mode:multiply; transform-origin:left center; pointer-events:none;
     animation:sweep .45s cubic-bezier(.4,0,.2,1) forwards;}
   #presoTable td.rhl::after, #presoTable th.rhl::after{background:var(--hlColor,#ffe44d);}
-  #presoTable td.chl::after, #presoTable th.chl::after{background:var(--colHlColor,#7dd3fc);}
-  #presoTable td.xhl::after, #presoTable th.xhl::after{background:var(--xHlColor,#fca5a5); opacity:.62;}
+  #presoTable td.chl::after, #presoTable th.chl::after{background:var(--colHlColor,#38bdf8); opacity:.6;}
+  #presoTable td.xhl::after, #presoTable th.xhl::after{background:var(--xHlColor,#fb7185); opacity:.66;}
   @keyframes sweep{from{transform:scaleX(0)} to{transform:scaleX(1)}}
 
   /* 집중(딤) */
@@ -374,6 +374,12 @@
     <button id="undoBtn" class="btn-ghost" onclick="undo()" disabled>↶ 실행 취소</button>
     <button id="redoBtn" class="btn-ghost" onclick="redo()" disabled>↷ 다시 실행</button>
     <button id="selModeBtn" class="btn-ghost" onclick="toggleSelMode()">🎨 셀 선택·꾸미기</button>
+    <span class="ci" style="display:inline-flex; align-items:center; gap:4px;">🔍 확대/축소
+      <button class="btn-ghost" style="padding:6px 10px;" onclick="zoomTbl(-0.1)">－</button>
+      <span id="zoomVal" style="min-width:42px; text-align:center; font-size:13px; font-weight:700;">100%</span>
+      <button class="btn-ghost" style="padding:6px 10px;" onclick="zoomTbl(0.1)">＋</button>
+      <button class="btn-ghost" style="padding:6px 10px;" onclick="zoomReset()">100%</button>
+    </span>
     <span class="hint" style="margin:0;">셀을 클릭/드래그해 선택 → 색·크기·굵기·병합. 열·행 경계를 마우스로 끌면 너비·높이가 조절됩니다. (Ctrl+Z / Ctrl+Y)</span>
   </div>
   <div id="fmtBar" class="fmtbar" style="display:none;">
@@ -449,8 +455,8 @@
     <button onclick="savePresoImage()">💾 화면 저장</button>
     <span class="sep"></span>
     <span class="ci">행강조<input type="color" id="hlColor"     value="#ffe44d" oninput="applyPresoColors()"></span>
-    <span class="ci">열강조<input type="color" id="colHlColor"  value="#7dd3fc" oninput="applyPresoColors()"></span>
-    <span class="ci">교차<input type="color" id="xHlColor"    value="#fca5a5" oninput="applyPresoColors()"></span>
+    <span class="ci">열강조<input type="color" id="colHlColor"  value="#38bdf8" oninput="applyPresoColors()"></span>
+    <span class="ci">교차<input type="color" id="xHlColor"    value="#fb7185" oninput="applyPresoColors()"></span>
     <span class="ci">연결선<input type="color" id="connColor"   value="#ff5a5f" oninput="applyPresoColors()"></span>
     <span class="ci">말풍선<input type="color" id="bubbleColor" value="#111827" oninput="applyPresoColors()"></span>
     <span class="ci">헤더<input type="color" id="pHeadBg"       value="#3182f6" oninput="applyPresoColors()"></span>
@@ -569,6 +575,15 @@ function parseSheetRich(ws){
 
 function textToHtml(t){ return escapeHtml(String(t==null?'':t)).replace(/\n/g,'<br>'); }
 
+/* ---------- 미리보기 확대/축소 ---------- */
+let tblZoom=1;
+function applyZoom(){
+  const t=document.getElementById('tbl'); if(t) t.style.zoom=tblZoom;
+  const v=document.getElementById('zoomVal'); if(v) v.textContent=Math.round(tblZoom*100)+'%';
+}
+function zoomTbl(d){ tblZoom=Math.min(3, Math.max(0.3, Math.round((tblZoom+d)*10)/10)); applyZoom(); }
+function zoomReset(){ tblZoom=1; applyZoom(); }
+
 /* 셀 데이터(객체) → 실제 셀 DOM */
 function makeCell(tag, cd){
   cd = cd || {};
@@ -627,7 +642,7 @@ function buildTableModel(m){
   document.getElementById('resultCard').style.display = 'block';
   decorateGrips(); applySelModeState(); clearSel();
   refreshControls(); applyStyle(); applyColVisibility();
-  populateGroupRowSelects();
+  populateGroupRowSelects(); applyZoom();
   autosave();
 }
 
@@ -995,8 +1010,9 @@ function applyStyle(){
 /* ---------- 이미지 저장 ---------- */
 function renderCanvas(){
   const tbl = document.getElementById('tbl');
+  const z = tbl.style.zoom; tbl.style.zoom = 1;   // 캡처는 100% 기준
   tbl.classList.add('capture');
-  return html2canvas(tbl, {scale:2, backgroundColor:'#ffffff'}).finally(()=> tbl.classList.remove('capture'));
+  return html2canvas(tbl, {scale:2, backgroundColor:'#ffffff'}).finally(()=>{ tbl.classList.remove('capture'); tbl.style.zoom = z; });
 }
 function saveImage(){
   if(typeof html2canvas==='undefined'){ alert('이미지 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
