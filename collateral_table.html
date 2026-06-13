@@ -183,11 +183,16 @@
   #presoTable .chandle:hover, #presoTable .rhandle:hover{background:#dce8ff; color:var(--blue);}
   #presoTable .chandle.sel, #presoTable .rhandle.sel{background:var(--blue); color:#fff;}
 
-  /* 형광펜 스윕 애니메이션 */
-  #presoTable td.hl::after, #presoTable th.hl::after{
-    content:''; position:absolute; inset:0; background:var(--hlColor,#ffe44d); opacity:.55;
+  /* 형광펜 스윕 애니메이션 — 행/열/교차 색 구분 */
+  #presoTable td.rhl::after, #presoTable th.rhl::after,
+  #presoTable td.chl::after, #presoTable th.chl::after,
+  #presoTable td.xhl::after, #presoTable th.xhl::after{
+    content:''; position:absolute; inset:0; opacity:.55;
     mix-blend-mode:multiply; transform-origin:left center; pointer-events:none;
     animation:sweep .45s cubic-bezier(.4,0,.2,1) forwards;}
+  #presoTable td.rhl::after, #presoTable th.rhl::after{background:var(--hlColor,#ffe44d);}
+  #presoTable td.chl::after, #presoTable th.chl::after{background:var(--colHlColor,#7dd3fc);}
+  #presoTable td.xhl::after, #presoTable th.xhl::after{background:var(--xHlColor,#fca5a5); opacity:.62;}
   @keyframes sweep{from{transform:scaleX(0)} to{transform:scaleX(1)}}
 
   /* 집중(딤) */
@@ -420,6 +425,8 @@
 <div id="preso">
   <div id="presoBar">
     <button onclick="exitPreso()">✏️ 편집으로</button>
+    <button id="p-undo" onclick="presoUndo()" disabled>↶</button>
+    <button id="p-redo" onclick="presoRedo()" disabled>↷</button>
     <span class="sep"></span>
     <button id="m-rowhl"   onclick="setPresoMode('rowhl')">🖍 행 강조</button>
     <button id="m-colhl"   onclick="setPresoMode('colhl')">🖍 열 강조</button>
@@ -433,7 +440,9 @@
     <button onclick="clearEffects()">🧹 효과 지우기</button>
     <button onclick="savePresoImage()">💾 화면 저장</button>
     <span class="sep"></span>
-    <span class="ci">형광펜<input type="color" id="hlColor"     value="#ffe44d" oninput="applyPresoColors()"></span>
+    <span class="ci">행강조<input type="color" id="hlColor"     value="#ffe44d" oninput="applyPresoColors()"></span>
+    <span class="ci">열강조<input type="color" id="colHlColor"  value="#7dd3fc" oninput="applyPresoColors()"></span>
+    <span class="ci">교차<input type="color" id="xHlColor"    value="#fca5a5" oninput="applyPresoColors()"></span>
     <span class="ci">연결선<input type="color" id="connColor"   value="#ff5a5f" oninput="applyPresoColors()"></span>
     <span class="ci">말풍선<input type="color" id="bubbleColor" value="#111827" oninput="applyPresoColors()"></span>
     <span class="ci">헤더<input type="color" id="pHeadBg"       value="#3182f6" oninput="applyPresoColors()"></span>
@@ -1245,10 +1254,10 @@ function updateUndoRedo(){
 }
 document.addEventListener('keydown', e=>{
   if(!(e.ctrlKey||e.metaKey)) return;
-  if(!document.getElementById('tbl')) return;
   const k=e.key.toLowerCase();
-  if(k==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
-  else if((k==='y') || (k==='z' && e.shiftKey)){ e.preventDefault(); redo(); }
+  const presoOn=document.getElementById('preso').classList.contains('on');
+  if(k==='z' && !e.shiftKey){ e.preventDefault(); presoOn?presoUndo():(document.getElementById('tbl')&&undo()); }
+  else if((k==='y') || (k==='z' && e.shiftKey)){ e.preventDefault(); presoOn?presoRedo():(document.getElementById('tbl')&&redo()); }
 });
 
 window.addEventListener('DOMContentLoaded', ()=>{
@@ -1288,16 +1297,28 @@ function populateGroupRowSelects(){
   [...tbl.tBodies[0].rows].forEach((tr,i)=> opts.push([String(i),[...tr.cells]]));
   const fill=sel=>{ sel.innerHTML=''; opts.forEach(([k,cells])=>{ const o=document.createElement('option'); o.value=k; o.textContent=rowLabel(k,cells); sel.appendChild(o); }); };
   fill(daeR); fill(jungR);
-  // 기본값: 병합(colspan>1)이 있는 행을 대분류·중분류로 추정
-  const mergeRows=opts.filter(([k,cells])=> cells.some(c=>c.colSpan>1 && !c.classList.contains('merged-hidden'))).map(([k])=>k);
-  daeR.value  = ([...daeR.options].some(o=>o.value===keep.dae)) ? keep.dae : (mergeRows[0]||'head');
-  jungR.value = ([...jungR.options].some(o=>o.value===keep.jung)) ? keep.jung : (mergeRows[1]||opts[1]?.[0]||'head');
+  // 기본값: "서로 다른 묶음이 2개 이상"인 행만 후보(표 전체를 덮는 제목 행은 제외)
+  const isGrp = k => new Set(effValsForRow(k).slice(1).filter(Boolean)).size >= 2;
+  const groupRows = opts.filter(([k])=> isGrp(k));
+  const mergeGroupRows = groupRows.filter(([,cells])=> cells.some(c=>c.colSpan>1 && !c.classList.contains('merged-hidden')));
+  const defDae = (mergeGroupRows[0]||groupRows[0]||['head'])[0];
+  const ord = key => opts.findIndex(o=>o[0]===key);
+  const defJung = (groupRows.find(([k])=> ord(k)>ord(defDae)) || groupRows.find(([k])=>k!==defDae) || [defDae])[0];
+  daeR.value  = (keep.dae  && [...daeR.options ].some(o=>o.value===keep.dae )) ? keep.dae  : defDae;
+  jungR.value = (keep.jung && [...jungR.options].some(o=>o.value===keep.jung)) ? keep.jung : defJung;
   refreshDaeOptions();
+}
+/* 항목(고정) 열 다음, 실제 묶음(병합)이 시작되는 첫 열 */
+function firstGroupCol(){
+  const cells=rowCellsByKey(document.getElementById('daeRow').value);
+  for(let c=1;c<cells.length;c++){ if(cells[c].colSpan>1 || cells[c].classList.contains('merged-hidden')) return c; }
+  return 1;
 }
 function refreshDaeOptions(){
   const vals=effValsForRow(document.getElementById('daeRow').value);
+  const fg=firstGroupCol();
   const sel=document.getElementById('daeSel'); const keep=sel.value;
-  const uniq=[...new Set(vals.slice(1).filter(Boolean))];
+  const uniq=[]; for(let c=fg;c<vals.length;c++){ if(vals[c] && !uniq.includes(vals[c])) uniq.push(vals[c]); }
   sel.innerHTML=''; uniq.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
   if(uniq.includes(keep)) sel.value=keep;
   refreshGroupChips(); refreshJungOptions();
@@ -1316,10 +1337,11 @@ function refreshJungOptions(){
 /* 대분류 묶음 칩: 체크 해제 시 그 대분류의 모든 열을 통째로 접기 */
 function refreshGroupChips(){
   const box=document.getElementById('groupChips'); if(!box) return;
-  const vals=effValsForRow(document.getElementById('daeRow').value);
+  const vals=effValsForRow(document.getElementById('daeRow').value); const fg=firstGroupCol();
   box.innerHTML='';
-  [...new Set(vals.slice(1).filter(Boolean))].forEach(v=>{
-    const cols=[]; for(let c=1;c<vals.length;c++) if(vals[c]===v) cols.push(c);
+  const seen=[]; for(let c=fg;c<vals.length;c++){ if(vals[c] && !seen.includes(vals[c])) seen.push(vals[c]); }
+  seen.forEach(v=>{
+    const cols=[]; for(let c=fg;c<vals.length;c++) if(vals[c]===v) cols.push(c);
     const shown=cols.some(c=>!colHidden[c]);
     const chip=document.createElement('span'); chip.className='chip'+(shown?'':' off');
     chip.innerHTML=`<label><input type="checkbox" ${shown?'checked':''}> ${escapeHtml(v)}</label>`;
@@ -1339,9 +1361,9 @@ function applyGroup(){
   const jungVals=effValsForRow(document.getElementById('jungRow').value);
   const dae=document.getElementById('daeSel').value, jung=document.getElementById('jungSel').value;
   if(!dae){ alert('대분류를 먼저 선택하세요.'); return; }
-  const ncol=tbl.tHead.rows[0].cells.length;
+  const ncol=tbl.tHead.rows[0].cells.length; const fg=firstGroupCol();
   for(let c=0;c<ncol;c++){
-    const keep = (c===0) || (daeVals[c]===dae && (jung==='' || jungVals[c]===jung));
+    const keep = (c<fg) || (daeVals[c]===dae && (jung==='' || jungVals[c]===jung));
     colHidden[c]=!keep;
   }
   applyColVisibility();
@@ -1417,8 +1439,8 @@ function afterCtxColChange(){
   refreshControls(); refreshGroupChips(); scheduleAutosave();
 }
 function ctxShowOnlyDae(dae){
-  const v=effValsForRow(document.getElementById('daeRow').value); const set=new Set(dae);
-  for(let c=0;c<colHidden.length;c++) colHidden[c]=!(c===0 || set.has(v[c]));
+  const v=effValsForRow(document.getElementById('daeRow').value); const set=new Set(dae); const fg=firstGroupCol();
+  for(let c=0;c<colHidden.length;c++) colHidden[c]=!(c<fg || set.has(v[c]));
   afterCtxColChange();
 }
 function ctxCollapseDae(dae){
@@ -1427,8 +1449,8 @@ function ctxCollapseDae(dae){
   afterCtxColChange();
 }
 function ctxShowOnlyCols(cols){
-  const keep=new Set(cols);
-  for(let c=0;c<colHidden.length;c++) colHidden[c]=!(c===0 || keep.has(c));
+  const keep=new Set(cols); const fg=firstGroupCol();
+  for(let c=0;c<colHidden.length;c++) colHidden[c]=!(c<fg || keep.has(c));
   afterCtxColChange();
 }
 function ctxCollapseCols(cols){ cols.forEach(c=>{ if(c>0) colHidden[c]=true; }); afterCtxColChange(); }
@@ -1442,6 +1464,44 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideCtx(); });
    ========================================================== */
 const SVGNS = 'http://www.w3.org/2000/svg';
 const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false };
+
+/* ---------- 발표 모드 실행취소/다시실행 ---------- */
+let presoHist=[], presoIdx=-1, _presoRestoring=false, _presoHistT=null;
+function presoSnapshot(){
+  return JSON.stringify({
+    rowHL:[...preso.rowHL], colHL:[...preso.colHL], chain:[...preso.chain],
+    dim:preso.dim, sumOn:preso.sumOn,
+    bubbles:[...preso.bubbles.entries()].map(([k,el])=>[k, el.innerHTML])
+  });
+}
+function pushPresoHistory(){
+  if(_presoRestoring) return;
+  const s=presoSnapshot();
+  if(presoHist[presoIdx]===s) return;
+  presoHist=presoHist.slice(0,presoIdx+1); presoHist.push(s); presoIdx=presoHist.length-1;
+  if(presoHist.length>80){ presoHist.shift(); presoIdx--; }
+  updatePresoUndo();
+}
+function schedulePresoHistory(){ if(_presoRestoring) return; clearTimeout(_presoHistT); _presoHistT=setTimeout(pushPresoHistory,200); }
+function updatePresoUndo(){
+  const u=document.getElementById('p-undo'), r=document.getElementById('p-redo');
+  if(u) u.disabled=presoIdx<=0; if(r) r.disabled=presoIdx>=presoHist.length-1;
+}
+function restorePresoState(s){
+  _presoRestoring=true;
+  const st=JSON.parse(s);
+  preso.rowHL=new Set(st.rowHL); preso.colHL=new Set(st.colHL); preso.chain=st.chain.slice();
+  preso.dim=st.dim; document.getElementById('m-dim').classList.toggle('active', preso.dim);
+  preso.bubbles.forEach(b=>b.remove()); preso.bubbles.clear();
+  const layer=document.querySelector('.bubbleLayer');
+  st.bubbles.forEach(([k,html])=>{ const b=document.createElement('div'); b.className='bubble'; b.contentEditable=true; b.innerHTML=html; b.addEventListener('input', schedulePresoHistory); layer.appendChild(b); preso.bubbles.set(k,b); positionBubble(k); });
+  preso.sumOn=st.sumOn; document.getElementById('m-sum').classList.toggle('active', preso.sumOn);
+  if(!preso.sumOn){ document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
+  applyHL(); applyDim(); drawConnections(); if(preso.sumOn) refreshSum();
+  _presoRestoring=false; updatePresoUndo();
+}
+function presoUndo(){ if(presoIdx>0){ presoIdx--; restorePresoState(presoHist[presoIdx]); } }
+function presoRedo(){ if(presoIdx<presoHist.length-1){ presoIdx++; restorePresoState(presoHist[presoIdx]); } }
 
 /* 발표용 셀 데이터 추출(스타일·줄바꿈 보존) */
 function readPresoCD(cell){
@@ -1575,6 +1635,7 @@ function enterPreso(){
   setPresoMode('rowhl');
   applyPresoColors();
   document.getElementById('preso').classList.add('on');
+  presoHist=[]; presoIdx=-1; _presoRestoring=false; pushPresoHistory();   // 발표 모드 되돌리기 기준점
 }
 function exitPreso(){ document.getElementById('preso').classList.remove('on'); }
 
@@ -1632,19 +1693,23 @@ function applyHL(){
   const tbl = document.getElementById('presoTable'); if(!tbl) return;
   tbl.querySelectorAll('td[data-col], th[data-col]:not(.chandle)').forEach(cell=>{
     const r=cell.dataset.row, c=cell.dataset.col;
-    const on = (r!==undefined && preso.rowHL.has(+r)) || (c!==undefined && preso.colHL.has(+c));
-    cell.classList.toggle('hl', on);
+    const rOn = r!==undefined && preso.rowHL.has(+r);
+    const cOn = c!==undefined && preso.colHL.has(+c);
+    cell.classList.toggle('rhl', rOn && !cOn);
+    cell.classList.toggle('chl', cOn && !rOn);
+    cell.classList.toggle('xhl', rOn && cOn);
   });
   tbl.querySelectorAll('.rhandle').forEach(h=> h.classList.toggle('sel', preso.rowHL.has(+h.dataset.row)));
   tbl.querySelectorAll('.chandle').forEach(h=> h.classList.toggle('sel', preso.colHL.has(+h.dataset.col)));
   refreshSum();   // 강조가 바뀌면 합산 보험금도 즉시 갱신
+  schedulePresoHistory();
 }
 
 /* ---------- 집중(딤) ---------- */
 function toggleDim(){
   preso.dim = !preso.dim;
   document.getElementById('m-dim').classList.toggle('active', preso.dim);
-  applyDim();
+  applyDim(); schedulePresoHistory();
 }
 function applyDim(){
   const stage = document.getElementById('presoStage');
@@ -1703,15 +1768,17 @@ function columnSum(c){
 }
 function toggleBubble(r,c){
   const key = r+'-'+c;
-  if(preso.bubbles.has(key)){ preso.bubbles.get(key).remove(); preso.bubbles.delete(key); return; }
+  if(preso.bubbles.has(key)){ preso.bubbles.get(key).remove(); preso.bubbles.delete(key); schedulePresoHistory(); return; }
   const sum = columnSum(c);
   const scope = preso.rowHL.size>0 ? `강조 ${preso.rowHL.size}건` : '전체';
   const colName = document.querySelector(`#presoTable .head-row th[data-col="${c}"]`)?.textContent.trim() || '합계';
   const b = document.createElement('div'); b.className='bubble'; b.contentEditable=true;
   b.textContent = `${colName} 합계(${scope}) ${krwShort(sum)}`;
+  b.addEventListener('input', schedulePresoHistory);
   document.querySelector('.bubbleLayer').appendChild(b);
   preso.bubbles.set(key, b);
   positionBubble(key);
+  schedulePresoHistory();
 }
 
 /* ---------- 💰 합산 보험금 (강조한 담보들을 더해 총 보험금 표시) ---------- */
@@ -1736,6 +1803,7 @@ function toggleSumPanel(){
   document.getElementById('m-sum').classList.toggle('active', preso.sumOn);
   if(preso.sumOn) refreshSum();
   else { document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
+  schedulePresoHistory();
 }
 function refreshSum(){
   if(!preso.sumOn) return;
@@ -1783,7 +1851,7 @@ function positionBubble(key){
 function toggleChain(r){
   const i = preso.chain.indexOf(r);
   if(i>=0) preso.chain.splice(i,1); else preso.chain.push(r);
-  drawConnections();
+  drawConnections(); schedulePresoHistory();
 }
 function drawConnections(){
   const svg = document.querySelector('.connLayer');
@@ -1823,6 +1891,8 @@ function repositionAll(){
 function applyPresoColors(){
   const R = document.documentElement.style, g = id=>document.getElementById(id).value;
   R.setProperty('--hlColor',     g('hlColor'));
+  R.setProperty('--colHlColor',  g('colHlColor'));
+  R.setProperty('--xHlColor',    g('xHlColor'));
   R.setProperty('--connColor',   g('connColor'));
   R.setProperty('--bubbleColor', g('bubbleColor'));
   R.setProperty('--pHeadBg',     g('pHeadBg'));
@@ -1835,7 +1905,7 @@ function applyPresoColors(){
 function clearEffects(){
   preso.rowHL.clear(); preso.colHL.clear(); preso.chain=[];
   preso.bubbles.forEach(b=> b.remove()); preso.bubbles.clear();
-  applyHL(); applyDim(); drawConnections();
+  applyHL(); applyDim(); drawConnections(); schedulePresoHistory();
 }
 
 /* ---------- 발표 화면 이미지 저장 ---------- */
