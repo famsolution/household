@@ -104,7 +104,8 @@
   #tbl{position:relative;}
   #tbl th, #tbl td{position:relative;}
   .merged-hidden{display:none;}
-  .wrapcol{white-space:normal !important; word-break:break-all;}
+  .wrapcol{white-space:normal !important; word-break:keep-all; overflow-wrap:anywhere;}
+  #tbl th, #tbl td{word-break:keep-all;}   /* 한글이 글자 단위로 세로로 잘리지 않도록 */
   /* 가로/세로 표 라인 전체 감추기(셀별 인라인 테두리는 그대로 유지) */
   table.no-hlines th, table.no-hlines td{border-top-width:0; border-bottom-width:0;}
   table.no-vlines th, table.no-vlines td{border-left-width:0; border-right-width:0;}
@@ -699,6 +700,7 @@ function refreshControls(){
     chip.className = 'chip' + (shown?'':' off');
     chip.innerHTML = `<label><input type="checkbox" ${shown?'checked':''}> ${escapeHtml(name)}</label><span class="x">✕</span>`;
     chip.querySelector('input').onchange = e=>{
+      if(!e.target.checked) freezeGeometry();
       colHidden[i] = !e.target.checked;
       chip.classList.toggle('off', !e.target.checked);
       applyColVisibility();
@@ -718,6 +720,16 @@ function applyColVisibility(){
     [...tr.cells].forEach((cell,i)=> cell.style.display = colHidden[i] ? 'none' : '');
   });
   scheduleAutosave();
+}
+/* 열을 감추기 전에 현재 열 너비·행 높이를 고정 → 감춰도 남은 표의 가로·세로 크기가 흔들리지 않음 */
+function freezeGeometry(){
+  const tbl = document.getElementById('tbl'); if(!tbl) return;
+  [...tbl.tHead.rows[0].cells].forEach(th=>{
+    if(!th.style.width){ const w=th.getBoundingClientRect().width; if(w) th.style.width=Math.round(w)+'px'; }
+  });
+  [tbl.tHead.rows[0], ...tbl.tBodies[0].rows].forEach(tr=>{
+    if(!tr.style.height){ const h=tr.getBoundingClientRect().height; if(h) tr.style.height=Math.round(h)+'px'; }
+  });
 }
 
 /* ---------- 행/열 추가·삭제 ---------- */
@@ -1377,6 +1389,7 @@ function refreshGroupChips(){
     const chip=document.createElement('span'); chip.className='chip'+(shown?'':' off');
     chip.innerHTML=`<label><input type="checkbox" ${shown?'checked':''}> ${escapeHtml(v)}</label>`;
     chip.querySelector('input').onchange=e=>{
+      if(!e.target.checked) freezeGeometry();
       cols.forEach(c=> colHidden[c]=!e.target.checked);
       applyColVisibility();
       if(document.getElementById('autoHideEmpty').checked) autoHideEmptyRows();
@@ -1392,6 +1405,7 @@ function applyGroup(){
   const jungVals=effValsForRow(document.getElementById('jungRow').value);
   const dae=document.getElementById('daeSel').value, jung=document.getElementById('jungSel').value;
   if(!dae){ alert('대분류를 먼저 선택하세요.'); return; }
+  freezeGeometry();
   const ncol=tbl.tHead.rows[0].cells.length; const fg=firstGroupCol();
   for(let c=0;c<ncol;c++){
     const keep = (c<fg) || (daeVals[c]===dae && (jung==='' || jungVals[c]===jung));
@@ -1482,21 +1496,24 @@ function afterCtxColChange(){
   refreshControls(); refreshGroupChips(); scheduleAutosave();
 }
 function ctxShowOnlyDae(dae){
+  freezeGeometry();
   const v=effValsForRow(document.getElementById('daeRow').value); const set=new Set(dae); const fg=firstGroupCol();
   for(let c=0;c<colHidden.length;c++) colHidden[c]=!(c<fg || set.has(v[c]));
   afterCtxColChange();
 }
 function ctxCollapseDae(dae){
+  freezeGeometry();
   const v=effValsForRow(document.getElementById('daeRow').value); const set=new Set(dae);
   for(let c=1;c<colHidden.length;c++) if(set.has(v[c])) colHidden[c]=true;
   afterCtxColChange();
 }
 function ctxShowOnlyCols(cols){
+  freezeGeometry();
   const keep=new Set(cols); const fg=firstGroupCol();
   for(let c=0;c<colHidden.length;c++) colHidden[c]=!(c<fg || keep.has(c));
   afterCtxColChange();
 }
-function ctxCollapseCols(cols){ cols.forEach(c=>{ if(c>0) colHidden[c]=true; }); afterCtxColChange(); }
+function ctxCollapseCols(cols){ freezeGeometry(); cols.forEach(c=>{ if(c>0) colHidden[c]=true; }); afterCtxColChange(); }
 document.getElementById('tableWrap').addEventListener('contextmenu', onTableContextMenu);
 document.addEventListener('click', e=>{ if(!e.target.closest('#ctxMenu')) hideCtx(); });
 document.addEventListener('scroll', hideCtx, true);
