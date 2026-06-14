@@ -155,6 +155,13 @@
   #preso.on{display:block;}
   #presoTable td.cellhl{ background-color:var(--cellHlColor,#fde047) !important; }
   #presoTable td.chained, #presoTable th.chained{ box-shadow:inset 0 0 0 3px var(--connColor,#ff5a5f); }
+  /* 🧮 값 합계: 선택 칸 강조 + 번호 배지 */
+  #presoTable td.picked, #presoTable th.picked{ box-shadow:inset 0 0 0 3px #16a34a; }
+  #presoTable .picknum{ position:absolute; top:2px; left:2px; min-width:18px; height:18px; line-height:18px;
+    padding:0 4px; border-radius:999px; background:#16a34a; color:#fff; font-size:12px; font-weight:800;
+    text-align:center; z-index:6; pointer-events:none; }
+  .bubble.picksum-bubble{ background:#16a34a; }
+  .bubble.picksum-bubble::after{ border-top-color:#16a34a; }
   /* 발표 도구모음 — 하단바, 기능 그룹별로 1행(넘치면 2행) */
   #presoBar{position:fixed; left:0; right:0; bottom:0; z-index:1100;
     display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px 20px;
@@ -503,6 +510,7 @@
       <button id="m-cellhl"  onclick="setPresoMode('cellhl')">🖌 칸</button>
       <button id="m-bubble"  onclick="setPresoMode('bubble')">💬 말풍선</button>
       <button id="m-connect" onclick="setPresoMode('connect')">🔗 연결</button>
+      <button id="m-picksum" onclick="setPresoMode('picksum')">🧮 값 합계</button>
       <span class="sep"></span>
       <button id="m-sum" onclick="toggleSumPanel()">💰 합산</button>
       <span class="ci">금액열<select id="sumCol" onchange="refreshSum()"></select></span>
@@ -525,7 +533,7 @@
       <span class="ci">배경<input type="color" id="stageBg"       value="#0f172a" oninput="applyPresoColors()"></span>
     </div>
   </div>
-  <div id="presoHint">⋮·⋯ 핸들 = 행/열 형광 · 🔗 연결: 칸 순서대로 클릭 · Ctrl+휠 = 확대/축소 · 🧊 고정 옆 행·열 숫자로 고정 범위 직접 지정 · 세팅 저장돼 재사용</div>
+  <div id="presoHint">⋮·⋯ 핸들 = 행/열 형광 · 🔗 연결 / 🧮 값 합계: 칸 클릭(번호+합계) · 우클릭 = 빠른 메뉴 · Ctrl+휠 = 확대/축소 · 🧊 옆 행·열 숫자로 고정</div>
   <div id="presoStage">
     <svg class="connLayer"></svg>
     <div class="bubbleLayer"></div>
@@ -1721,13 +1729,13 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideCtx(); });
    🎬 발표(프레젠테이션) 모드
    ========================================================== */
 const SVGNS = 'http://www.w3.org/2000/svg';
-const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false, freeze:false, frzRows:0, frzCols:0 };
+const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], pick:[], pickBubble:null, bubbles:new Map(), painting:null, dim:false, sumOn:false, freeze:false, frzRows:0, frzCols:0 };
 
 /* ---------- 발표 모드 실행취소/다시실행 ---------- */
 let presoHist=[], presoIdx=-1, _presoRestoring=false, _presoHistT=null;
 function presoSnapshot(){
   return JSON.stringify({
-    rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL], chain:[...preso.chain],
+    rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL], chain:[...preso.chain], pick:[...preso.pick],
     dim:preso.dim, sumOn:preso.sumOn,
     bubbles:[...preso.bubbles.entries()].map(([k,el])=>[k, el.innerHTML])
   });
@@ -1748,14 +1756,14 @@ function updatePresoUndo(){
 function restorePresoState(s){
   _presoRestoring=true;
   const st=JSON.parse(s);
-  preso.rowHL=new Set(st.rowHL); preso.colHL=new Set(st.colHL); preso.cellHL=new Set(st.cellHL||[]); preso.chain=st.chain.slice();
+  preso.rowHL=new Set(st.rowHL); preso.colHL=new Set(st.colHL); preso.cellHL=new Set(st.cellHL||[]); preso.chain=st.chain.slice(); preso.pick=(st.pick||[]).slice();
   preso.dim=st.dim; document.getElementById('m-dim').classList.toggle('active', preso.dim);
   preso.bubbles.forEach(b=>b.remove()); preso.bubbles.clear();
   const layer=document.querySelector('.bubbleLayer');
   st.bubbles.forEach(([k,html])=>{ const b=document.createElement('div'); b.className='bubble'; b.contentEditable=true; b.innerHTML=html; b.addEventListener('input', schedulePresoHistory); layer.appendChild(b); preso.bubbles.set(k,b); positionBubble(k); });
   preso.sumOn=st.sumOn; document.getElementById('m-sum').classList.toggle('active', preso.sumOn);
   if(!preso.sumOn){ document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
-  applyHL(); applyCellHL(); applyDim(); drawConnections(); if(preso.sumOn) refreshSum();
+  applyHL(); applyCellHL(); applyDim(); drawConnections(); renderPickSum(); if(preso.sumOn) refreshSum();
   _presoRestoring=false; updatePresoUndo();
 }
 function presoUndo(){ if(presoIdx>0){ presoIdx--; restorePresoState(presoHist[presoIdx]); } }
@@ -1884,7 +1892,7 @@ function el(tag, cls, txt){ const e=document.createElement(tag); if(cls) e.class
 let _presoSaved=null;
 function currentPresoSettings(){
   return {
-    chain:[...preso.chain], rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL],
+    chain:[...preso.chain], pick:[...preso.pick], rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL],
     freeze:!!preso.freeze, frzRows:preso.frzRows||0, frzCols:preso.frzCols||0,
     sumOn:!!preso.sumOn, dim:!!preso.dim,
     sumCol: document.getElementById('sumCol').value,
@@ -1895,7 +1903,7 @@ function currentPresoSettings(){
 function applyPresoSettings(s){
   if(!s) return;
   preso.rowHL=new Set(s.rowHL||[]); preso.colHL=new Set(s.colHL||[]); preso.cellHL=new Set(s.cellHL||[]);
-  preso.chain=(s.chain||[]).slice();
+  preso.chain=(s.chain||[]).slice(); preso.pick=(s.pick||[]).slice();
   preso.dim=!!s.dim; document.getElementById('m-dim').classList.toggle('active', preso.dim);
   if(s.pFont) document.getElementById('pFont').value=s.pFont;
   if(s.sumCol!=null){ const sel=document.getElementById('sumCol'); if([...sel.options].some(o=>o.value==s.sumCol)) sel.value=s.sumCol; }
@@ -1908,7 +1916,7 @@ function applyPresoSettings(s){
   document.getElementById('frzRows').value = preso.frzRows||0;
   document.getElementById('frzCols').value = preso.frzCols||0;
   document.getElementById('m-freeze').classList.toggle('active', preso.freeze);
-  applyPresoColors(); applyHL(); applyCellHL(); applyDim(); drawConnections();
+  applyPresoColors(); applyHL(); applyCellHL(); applyDim(); drawConnections(); renderPickSum();
   if(preso.sumOn) refreshSum(); else { document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
   if(preso.freeze){ freezePreso(); requestAnimationFrame(()=>{ if(preso.freeze) freezePreso(); }); }   // 레이아웃 안정 후 위치 재계산
 }
@@ -1930,7 +1938,7 @@ function enterPreso(){
   const newTbl = buildPresoTable(grid);
   stage.insertBefore(newTbl, stage.firstChild);
 
-  preso.bubbles.clear(); stage.classList.remove('dim');
+  preso.bubbles.clear(); preso.pickBubble=null; stage.classList.remove('dim');
   stage.querySelector('.bubbleLayer').innerHTML='';
   document.querySelector('.connLayer').innerHTML='';
 
@@ -2010,7 +2018,7 @@ document.getElementById('preso').addEventListener('wheel', e=>{
 
 function setPresoMode(m){
   preso.mode = m;
-  ['rowhl','colhl','cellhl','bubble','connect'].forEach(k=>
+  ['rowhl','colhl','cellhl','bubble','connect','picksum'].forEach(k=>
     document.getElementById('m-'+k).classList.toggle('active', k===m));
 }
 
@@ -2018,12 +2026,15 @@ function setPresoMode(m){
 function rowOf(cell){ return cell && cell.dataset.row!==undefined ? +cell.dataset.row : null; }
 function colOf(cell){ return cell && cell.dataset.col!==undefined ? +cell.dataset.col : null; }
 function getCell(r,c){ return document.querySelector(`#presoTable td[data-row="${r}"][data-col="${c}"]`); }
+/* 값 계산용 텍스트(번호 배지 제외) */
+function valText(cell){ if(!cell) return ''; if(cell.querySelector && cell.querySelector('.picknum')){ const x=cell.cloneNode(true); x.querySelectorAll('.picknum').forEach(e=>e.remove()); return x.textContent; } return cell.textContent; }
 
 /* ---------- 이벤트 ---------- */
 function bindPresoEvents(tbl){
   tbl.addEventListener('pointerdown', presoDown);
   tbl.addEventListener('pointerover', presoOver);
   tbl.addEventListener('click', presoClick);
+  tbl.addEventListener('contextmenu', presoContextMenu);
 }
 window.addEventListener('pointerup', ()=>{ preso.painting=null; });
 window.addEventListener('resize', ()=>{ if(document.getElementById('preso').classList.contains('on')){ adjustPresoLayout(); if(preso.freeze) freezePreso(); repositionAll(); } });
@@ -2068,6 +2079,63 @@ function presoClick(e){
   const r = rowOf(cell), c = colOf(cell);
   if(preso.mode==='bubble'){ if(r!=null && c!=null) toggleBubble(r,c); }
   else if(preso.mode==='connect'){ if(r!=null && c!=null) toggleChain(r,c); }
+  else if(preso.mode==='picksum'){ if(r!=null && c!=null) togglePick(r,c); }
+}
+/* ---------- 🧮 값 합계: 클릭한 칸에 번호 + 합계 말풍선 ---------- */
+function togglePick(r,c){
+  const key=r+','+c, i=preso.pick.indexOf(key);
+  if(i>=0) preso.pick.splice(i,1); else preso.pick.push(key);
+  renderPickSum(); schedulePresoHistory();
+}
+function renderPickSum(){
+  const tbl=document.getElementById('presoTable'); if(!tbl) return;
+  tbl.querySelectorAll('.picknum').forEach(e=>e.remove());
+  tbl.querySelectorAll('.picked').forEach(c=>c.classList.remove('picked'));
+  if(preso.pickBubble){ preso.pickBubble.remove(); preso.pickBubble=null; }
+  if(!preso.pick.length) return;
+  let total=0; const parts=[];
+  preso.pick.forEach((key,idx)=>{
+    const [r,c]=key.split(',').map(Number); const cell=getCell(r,c); if(!cell) return;
+    const v=parseKRW(valText(cell));   // 배지 추가 전, 깨끗한 텍스트로 값 계산
+    cell.classList.add('picked');
+    const b=document.createElement('span'); b.className='picknum'; b.textContent=idx+1; cell.appendChild(b);
+    if(v!=null){ total+=v; parts.push(krwShort(v)); }
+  });
+  const bub=document.createElement('div'); bub.className='bubble picksum-bubble';
+  bub.innerHTML = (parts.length>1 ? parts.join(' + ')+' = ' : '') + '합계 '+krwShort(total);
+  document.querySelector('.bubbleLayer').appendChild(bub);
+  preso.pickBubble=bub;
+  positionPickBubble();
+}
+function positionPickBubble(){
+  if(!preso.pickBubble || !preso.pick.length) return;
+  const [r,c]=preso.pick[preso.pick.length-1].split(',').map(Number);
+  const cell=getCell(r,c); if(!cell) return;
+  const stage=document.getElementById('presoStage');
+  const cr=cell.getBoundingClientRect(), sr=stage.getBoundingClientRect();
+  preso.pickBubble.style.left=(cr.left-sr.left+cr.width/2)+'px';
+  preso.pickBubble.style.top =(cr.top-sr.top)+'px';
+}
+/* ---------- 발표 중 우클릭 빠른 메뉴 ---------- */
+function presoContextMenu(e){
+  const cell=e.target.closest('td[data-col],th[data-col]'); if(!cell) return;
+  e.preventDefault();
+  const r=rowOf(cell), c=colOf(cell);
+  const items=[];
+  if(r!=null) items.push({label:'🖍 이 행 강조', fn:()=>setRowHL(r,!preso.rowHL.has(r))});
+  if(c!=null) items.push({label:'🖍 이 열 강조', fn:()=>setColHL(c,!preso.colHL.has(c))});
+  if(r!=null&&c!=null) items.push({label:'🖌 이 칸 강조', fn:()=>setCellHL(r,c,!preso.cellHL.has(r+','+c))});
+  items.push('sep');
+  if(r!=null&&c!=null){
+    items.push({label:'🧮 합계에 더하기/빼기', fn:()=>togglePick(r,c)});
+    items.push({label:'🔗 연결에 넣기/빼기', fn:()=>toggleChain(r,c)});
+    items.push({label:'💬 이 열 합계 말풍선', fn:()=>toggleBubble(r,c)});
+  }
+  items.push('sep');
+  items.push({label:'🔦 집중 켜기/끄기', fn:()=>toggleDim()});
+  items.push({label:'🧊 고정 켜기/끄기', fn:()=>toggleFreeze()});
+  items.push({label:'🧹 효과 모두 지우기', fn:()=>clearEffects()});
+  renderCtx(e.clientX, e.clientY, items);
 }
 
 /* ---------- 형광펜 ---------- */
@@ -2150,7 +2218,7 @@ function columnSum(c){
     const r=+tr.dataset.row;
     if(onlyHL && !preso.rowHL.has(r)) return;
     const cell = tr.querySelector(`td[data-col="${c}"]`);
-    const n = parseKRW(cell.textContent); if(n!=null) s+=n;
+    const n = parseKRW(valText(cell)); if(n!=null) s+=n;
   });
   return s;
 }
@@ -2204,9 +2272,9 @@ function refreshSum(){
   const all = [...tbl.tBodies[0].rows].map(tr=>+tr.dataset.row);
   const useHL = preso.rowHL.size>0;
   const rows = (useHL ? all.filter(r=>preso.rowHL.has(r)) : all);
-  const items = rows.map(r=>({ row:r, name:getCell(r,0)?.textContent.trim()||'담보',
-                               raw:getCell(r,c)?.textContent.trim()||'',
-                               val:parseKRW(getCell(r,c)?.textContent) }))
+  const items = rows.map(r=>({ row:r, name:valText(getCell(r,0)).trim()||'담보',
+                               raw:valText(getCell(r,c)).trim()||'',
+                               val:parseKRW(valText(getCell(r,c))) }))
                     .filter(it=>it.val!=null);
   // 합산에 들어간 금액 칸을 표에서 자동 강조
   clearSumGlow();
@@ -2278,6 +2346,7 @@ function drawConnections(){
 function repositionAll(){
   preso.bubbles.forEach((b,k)=> positionBubble(k));
   drawConnections();
+  positionPickBubble();
 }
 
 /* ---------- 색상/크기 커스텀 ---------- */
@@ -2299,9 +2368,9 @@ function applyPresoColors(){
 
 /* ---------- 효과 지우기 ---------- */
 function clearEffects(){
-  preso.rowHL.clear(); preso.colHL.clear(); preso.cellHL.clear(); preso.chain=[];
+  preso.rowHL.clear(); preso.colHL.clear(); preso.cellHL.clear(); preso.chain=[]; preso.pick=[];
   preso.bubbles.forEach(b=> b.remove()); preso.bubbles.clear();
-  applyHL(); applyCellHL(); applyDim(); drawConnections(); schedulePresoHistory();
+  applyHL(); applyCellHL(); applyDim(); drawConnections(); renderPickSum(); schedulePresoHistory();
 }
 
 /* ---------- 발표 화면 이미지 저장 ---------- */
