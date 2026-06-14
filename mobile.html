@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>보험 담보표 — 모바일 보기</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{ --mf:18px; --conn:#ff5a5f; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%; overflow:hidden; font-family:'Pretendard',-apple-system,sans-serif;
+    background:#0f172a; color:#e5e8eb; overscroll-behavior:none;}
+  #app{display:flex; flex-direction:column; height:100%;}
+
+  /* 상단 바 */
+  #top{flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 12px;
+    background:#0b1220; box-shadow:0 2px 10px rgba(0,0,0,.4); z-index:20;}
+  #top .title{font-size:14px; font-weight:800; color:#cbd5e1; margin-right:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #top button, .filebtn{font-family:inherit; border:none; border-radius:10px; padding:9px 12px; font-size:14px; font-weight:700;
+    background:#1f2937; color:#e5e8eb; cursor:pointer;}
+  #top button:active{background:#374151;}
+
+  /* 표 무대 */
+  #stage{flex:1 1 auto; overflow:auto; position:relative; -webkit-overflow-scrolling:touch; padding:10px;}
+  #inner{display:inline-block; position:relative; min-width:100%;}
+  .connLayer{position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:6;}
+  .connLayer path{fill:none; stroke:var(--conn); stroke-width:3; stroke-linecap:round; stroke-dasharray:10 7;}
+  .connLayer .node{fill:var(--conn);}
+  .connLayer .nodeTxt{fill:#fff; font-size:13px; font-weight:800; text-anchor:middle; dominant-baseline:central;}
+  .bubbleLayer{position:absolute; inset:0; pointer-events:none; z-index:7;}
+  .mbub{position:absolute; transform:translateY(-50%); background:#16a34a; color:#fff; font-weight:800;
+    font-size:calc(var(--mf) * .82); padding:7px 12px; border-radius:12px; white-space:nowrap; box-shadow:0 6px 18px rgba(0,0,0,.4);}
+
+  table{border-collapse:separate; border-spacing:0; background:#fff; color:#191f28; border-radius:10px; overflow:hidden; user-select:none;}
+  th,td{border:1px solid var(--ln,#d7dce3); padding:9px 12px; font-size:var(--mf); text-align:center;
+    white-space:nowrap; word-break:keep-all; vertical-align:middle; position:relative;}
+  thead th{background:var(--hb,#3182f6); color:#fff; font-weight:800;}
+  td.name{font-weight:800;}
+
+  /* 강조 (오버레이) */
+  td.rhl::after, th.rhl::after, td.chl::after, th.chl::after, td.xhl::after, th.xhl::after, td.csel::after, th.csel::after{
+    content:''; position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply;}
+  .rhl::after{background:var(--rc,#ffe44d); opacity:.5;}
+  .chl::after{background:var(--cc,#38bdf8); opacity:.45;}
+  .xhl::after{background:var(--xc,#fb7185); opacity:.5;}
+  .csel::after{background:var(--kc,#fde047); opacity:.55;}
+
+  /* 합계 번호/연결 표시 */
+  .picknum{position:absolute; top:2px; left:2px; min-width:18px; height:18px; line-height:18px; padding:0 4px;
+    border-radius:999px; background:#16a34a; color:#fff; font-size:12px; font-weight:800; text-align:center; z-index:6;}
+  td.picked, th.picked{ box-shadow:inset 0 0 0 3px #16a34a; }
+  td.chained, th.chained{ box-shadow:inset 0 0 0 3px var(--conn); }
+
+  /* 고정(sticky) */
+  #inner.frz .ft{position:sticky; z-index:30;}
+  #inner.frz .fl{position:sticky; z-index:25;}
+  #inner.frz .ft.fl{z-index:38;}
+  #inner.frz .ftlast{box-shadow:0 4px 6px -2px rgba(0,0,0,.4);}
+  #inner.frz .fllast{box-shadow:4px 0 6px -2px rgba(0,0,0,.4);}
+  #inner.frz .ftlast.fllast{box-shadow:4px 4px 6px -2px rgba(0,0,0,.4);}
+
+  /* 하단 도구바 */
+  #bar{flex:0 0 auto; display:flex; flex-wrap:wrap; justify-content:center; gap:7px; padding:9px 8px;
+    background:rgba(255,255,255,.97); box-shadow:0 -4px 20px rgba(0,0,0,.4); z-index:20;}
+  #bar button{font-family:inherit; border:none; border-radius:12px; padding:11px 13px; font-size:14px; font-weight:700;
+    background:#eef2f7; color:#2b3440; min-width:48px; min-height:44px; cursor:pointer;}
+  #bar button.on{background:#3182f6; color:#fff;}
+  #bar .gap{width:1px; align-self:stretch; background:#dde3ea; margin:2px;}
+
+  #empty{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; padding:24px; color:#cbd5e1;}
+  #empty .big{font-size:20px; font-weight:800;}
+  #empty .sub{font-size:14px; opacity:.8; line-height:1.6;}
+  #empty .filebtn{background:#3182f6; color:#fff; font-size:16px; padding:14px 22px;}
+  input[type=file]{display:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <span class="title" id="docTitle">보험 담보표 — 모바일 보기</span>
+    <label class="filebtn">📂 파일<input type="file" id="file" accept=".json,application/json"></label>
+    <button onclick="loadSample()">예시</button>
+  </div>
+
+  <div id="stage">
+    <div id="inner">
+      <svg class="connLayer"></svg>
+      <div class="bubbleLayer"></div>
+      <!-- table inserted here -->
+    </div>
+    <div id="empty">
+      <div class="big">📂 담보표 파일을 불러오세요</div>
+      <div class="sub">PC에서 <b>「💼 고객용(발표) 파일로 저장」</b>으로 만든 <b>.json</b> 파일을 선택하면<br>강조·연결·합계·고정 세팅까지 그대로 보입니다.</div>
+      <label class="filebtn">📂 파일 불러오기<input type="file" id="file2" accept=".json,application/json"></label>
+      <button onclick="loadSample()" style="background:#1f2937;color:#e5e8eb;border:none;border-radius:10px;padding:11px 18px;font-weight:700;">예시로 보기</button>
+    </div>
+  </div>
+
+  <div id="bar">
+    <button id="m-move" class="on" onclick="setMode('move')">✋ 이동</button>
+    <button id="m-hl"   onclick="setMode('hl')">🖍 강조</button>
+    <button id="m-sum"  onclick="setMode('sum')">🧮 합계</button>
+    <button id="m-conn" onclick="setMode('conn')">🔗 연결</button>
+    <span class="gap"></span>
+    <button id="m-frz" onclick="toggleFreeze()">🧊 고정</button>
+    <button onclick="zoom(-1)">A−</button>
+    <button onclick="zoom(1)">A＋</button>
+    <span class="gap"></span>
+    <button onclick="newGroup()">➕ 새묶음</button>
+    <button onclick="clearFx()">🧹 지우기</button>
+  </div>
+</div>
+
+<script>
+/* ===== 금액 파서 (데스크톱과 동일) ===== */
+function fmt(n){ return Math.round(n).toLocaleString('ko-KR'); }
+function parseKRW(str){
+  let s=String(str==null?'':str).replace(/[\s,]/g,'').replace(/원.*$/,'');
+  if(!s) return null;
+  if(/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+  if(!/[억만천백십]/.test(s)){ const d=s.replace(/[^\d.]/g,''); return d?parseFloat(d):null; }
+  const chunk=(ch)=>{ if(ch==='') return 1; if(/^\d+(\.\d+)?$/.test(ch)) return parseFloat(ch);
+    let v=0,cur=ch; [['천',1000],['백',100],['십',10]].forEach(([u,m])=>{ const x=cur.match(new RegExp('([\\d.]*)'+u)); if(x){ v+=(x[1]?parseFloat(x[1]):1)*m; cur=cur.replace(x[0],''); } });
+    if(cur && /^\d+(\.\d+)?$/.test(cur)) v+=parseFloat(cur); return v||1; };
+  let total=0, work=s;
+  const am=work.match(/^(.*?)억/); if(am){ total+=chunk(am[1])*1e8; work=work.slice(am[0].length); }
+  const mm=work.match(/^(.*?)만/); if(mm){ total+=chunk(mm[1])*1e4; work=work.slice(mm[0].length); }
+  if(work) total+=chunk(work);
+  return total||null;
+}
+function krwShort(n){ n=Math.round(n);
+  if(n>=1e8){ const e=Math.floor(n/1e8), m=Math.round((n%1e8)/1e4); return e+'억'+(m?' '+fmt(m)+'만':'')+'원'; }
+  if(n>=1e4 && n%1e4===0) return fmt(n/1e4)+'만원';
+  return fmt(n)+'원'; }
+function escHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function textToHtml(t){ return escHtml(String(t==null?'':t)).replace(/\n/g,'<br>'); }
+
+/* ===== 상태 ===== */
+let M=null, G=[], ncol=0, mfont=18;
+let view={ rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chainGroups:[[]], pickGroups:[[]],
+           freeze:false, frzRows:0, frzCols:0 };
+let mode='move';
+const PICK_PAL=['#16a34a','#2563eb','#f59e0b','#a855f7','#0ea5e9','#e11d48'];
+const CONN_PAL=['#ff5a5f','#16a34a','#f59e0b','#a855f7','#0ea5e9','#e11d48'];
+
+/* ===== 데이터 로드 ===== */
+function normCell(cd){ return (typeof cd==='string') ? {h:textToHtml(cd)} : Object.assign({}, cd); }
+function loadModel(d){
+  if(!d || !d.head){ alert('올바른 담보표 파일이 아닙니다.'); return; }
+  M=d; ncol=d.head.length;
+  G=[ d.head.map(normCell) ];
+  (d.rows||[]).forEach(r=> G.push((r.cells||[]).map(normCell)));
+  restoreCanonical();
+  // 발표 세팅 복원
+  const p=d.preso||{};
+  view.rowHL=new Set(p.rowHL||[]); view.colHL=new Set(p.colHL||[]); view.cellHL=new Set(p.cellHL||[]);
+  view.chainGroups = p.chainGroups ? p.chainGroups.map(g=>g.slice()) : (p.chain?[p.chain.slice()]:[[]]);
+  view.pickGroups  = p.pickGroups  ? p.pickGroups.map(g=>g.slice())  : (p.pick?[p.pick.slice()]:[[]]);
+  view.freeze=!!p.freeze; view.frzRows=p.frzRows||0; view.frzCols=p.frzCols||0;
+  if(p.pFont) mfont=Math.max(12,Math.min(40, Math.round(p.pFont*0.8)));
+  document.getElementById('docTitle').textContent = d.name || '담보표';
+  document.getElementById('m-frz').classList.toggle('on', view.freeze);
+  document.getElementById('empty').style.display='none';
+  applyStyleVars(d.style||{});
+  render();
+  try{ localStorage.setItem('mobile_last', JSON.stringify(d)); }catch(e){}
+}
+function restoreCanonical(){
+  if(!M.mergeSpec) return;
+  M.mergeSpec.forEach(g=>{
+    const a=G[g.r] && G[g.r][g.c]; if(!a) return;
+    a.h=g.html; a.cs=g.cs; a.rs=g.rs; delete a.mh;
+    for(let rr=g.r;rr<g.r+(g.rs||1);rr++) for(let cc=g.c;cc<g.c+(g.cs||1);cc++){
+      if(rr===g.r&&cc===g.c) continue; const x=G[rr]&&G[rr][cc]; if(x){ x.mh=true; x.cs=1; x.rs=1; x.h=''; }
+    }
+  });
+}
+function applyStyleVars(s){
+  const R=document.documentElement.style;
+  if(s.headBg) R.setProperty('--hb', s.headBg);
+  if(s.cellLine) R.setProperty('--ln', s.cellLine);
+}
+
+/* ===== 보이는 격자(병합 재배치, 숨김 반영) ===== */
+function visibleGrid(){
+  const colVis=[]; for(let c=0;c<ncol;c++) colVis[c]=!(M.colHidden&&M.colHidden[c]);
+  const rowVis=G.map((row,r)=> r===0 ? true : !((M.rows[r-1])&&M.rows[r-1].hidden));
+  const visCols=[]; for(let c=0;c<ncol;c++) if(colVis[c]) visCols.push(c);
+  const colNew={}; visCols.forEach((c,i)=>colNew[c]=i);
+  const emitAt={}, skip=new Set();
+  G.forEach((row,r)=>{ row.forEach((cd,c)=>{
+    if(cd.mh){ skip.add(r+','+c); return; }
+    const cs=cd.cs||1, rs=cd.rs||1;
+    if(cs>1||rs>1){
+      const vc=[]; for(let cc=c;cc<c+cs;cc++) if(colVis[cc]) vc.push(cc);
+      const vr=[]; for(let rr=r;rr<r+rs;rr++) if(rowVis[rr]) vr.push(rr);
+      if(!vc.length||!vr.length){ skip.add(r+','+c); return; }
+      const ar=vr[0], ac=vc[0]; emitAt[ar+','+ac]={cs:vc.length, rs:vr.length, src:cd};
+      vr.forEach(rr=>vc.forEach(cc=>{ if(rr!==ar||cc!==ac) skip.add(rr+','+cc); }));
+      if(r!==ar||c!==ac) skip.add(r+','+c);
+    }
+  });});
+  const mk=(cd,c,em)=>{ const o=Object.assign({}, cd); o.c=colNew[c]; if(em){ if(em.cs>1)o.cs=em.cs; else delete o.cs; if(em.rs>1)o.rs=em.rs; else delete o.rs; } else { delete o.cs; delete o.rs; } return o; };
+  const head=[];
+  visCols.forEach(c=>{ const k='0,'+c, em=emitAt[k]; if(em) head.push(mk(em.src,c,em)); else if(skip.has(k)){} else head.push(mk(G[0][c],c,null)); });
+  const visR=[]; for(let r=1;r<G.length;r++) if(rowVis[r]) visR.push(r);
+  const rows=[];
+  visR.forEach(r=>{ const out=[]; visCols.forEach(c=>{ const k=r+','+c, em=emitAt[k]; if(em) out.push(mk(em.src,c,em)); else if(skip.has(k)){} else out.push(mk(G[r][c],c,null)); }); rows.push(out); });
+  return {head, rows};
+}
+
+/* ===== 표 그리기 ===== */
+function cellStyleClean(style){ // font-size/width/height 제외(모바일 자체 크기 사용)
+  if(!style) return '';
+  return style.replace(/(?:^|;)\s*(font-size|width|height)\s*:[^;]*/gi,'');
+}
+function render(){
+  const inner=document.getElementById('inner');
+  document.documentElement.style.setProperty('--mf', mfont+'px');
+  inner.querySelector('table')?.remove();
+  const vg=visibleGrid();
+  const tbl=document.createElement('table');
+  const thead=document.createElement('thead'), htr=document.createElement('tr');
+  vg.head.forEach(cd=>{ const th=document.createElement('th'); th.dataset.col=cd.c; if(cd.cs>1)th.colSpan=cd.cs; if(cd.rs>1)th.rowSpan=cd.rs;
+    th.innerHTML=cd.h!=null?cd.h:textToHtml(cd.text||''); const s=cellStyleClean(cd.style); if(s)th.style.cssText=s; htr.appendChild(th); });
+  thead.appendChild(htr); tbl.appendChild(thead);
+  const tbody=document.createElement('tbody');
+  vg.rows.forEach((row,r)=>{ const tr=document.createElement('tr'); tr.dataset.row=r;
+    row.forEach(cd=>{ const td=document.createElement('td'); if(cd.c===0)td.classList.add('name');
+      td.dataset.row=r; td.dataset.col=cd.c; if(cd.cs>1)td.colSpan=cd.cs; if(cd.rs>1)td.rowSpan=cd.rs;
+      td.innerHTML=cd.h!=null?cd.h:textToHtml(cd.text||''); const s=cellStyleClean(cd.style); if(s)td.style.cssText=s; tr.appendChild(td); });
+    tbody.appendChild(tr); });
+  tbl.appendChild(tbody);
+  inner.appendChild(tbl);
+  applyHL(); renderPick(); drawConn(); applyFreeze();
+}
+
+/* ===== 조회 ===== */
+function getCell(r,c){ return document.querySelector(`#inner td[data-row="${r}"][data-col="${c}"]`); }
+function valText(cell){ if(!cell) return ''; if(cell.querySelector && cell.querySelector('.picknum')){ const x=cell.cloneNode(true); x.querySelectorAll('.picknum').forEach(e=>e.remove()); return x.textContent; } return cell.textContent; }
+
+/* ===== 강조 ===== */
+function applyHL(){
+  document.querySelectorAll('#inner td,#inner th').forEach(cell=>{
+    const r=cell.dataset.row, c=cell.dataset.col;
+    const rOn=r!==undefined && view.rowHL.has(+r);
+    const cOn=c!==undefined && view.colHL.has(+c);
+    const kOn=(r!==undefined&&c!==undefined)&&view.cellHL.has(r+','+c);
+    cell.classList.toggle('rhl', rOn&&!cOn);
+    cell.classList.toggle('chl', cOn&&!rOn);
+    cell.classList.toggle('xhl', rOn&&cOn);
+    cell.classList.toggle('csel', kOn&&!rOn&&!cOn);
+  });
+}
+
+/* ===== 합계(다중그룹, 오른쪽 말풍선) ===== */
+function activePick(){ if(!view.pickGroups.length) view.pickGroups=[[]]; return view.pickGroups[view.pickGroups.length-1]; }
+function togglePick(r,c){ const g=activePick(), k=r+','+c, i=g.indexOf(k); if(i>=0)g.splice(i,1); else g.push(k); renderPick(); save(); }
+function renderPick(){
+  const inner=document.getElementById('inner'), lay=inner.querySelector('.bubbleLayer'), sr=inner.getBoundingClientRect();
+  inner.querySelectorAll('.picknum').forEach(e=>e.remove());
+  inner.querySelectorAll('.picked').forEach(c=>{ c.classList.remove('picked'); c.style.boxShadow=''; });
+  lay.querySelectorAll('.mbub').forEach(b=>b.remove());
+  view.pickGroups.forEach((g,gi)=>{ if(!g.length) return;
+    const color=PICK_PAL[gi%PICK_PAL.length]; let total=0, parts=[], last=null;
+    g.forEach((k,idx)=>{ const [r,c]=k.split(',').map(Number); const cell=getCell(r,c); if(!cell) return;
+      const v=parseKRW(valText(cell)); cell.classList.add('picked'); cell.style.boxShadow='inset 0 0 0 3px '+color;
+      const b=document.createElement('span'); b.className='picknum'; b.textContent=idx+1; b.style.background=color; cell.appendChild(b);
+      if(v!=null){ total+=v; parts.push(krwShort(v)); } last=cell; });
+    const bub=document.createElement('div'); bub.className='mbub'; bub.style.background=color;
+    bub.innerHTML=(parts.length>1?parts.join(' + ')+' = ':'')+'합계 '+krwShort(total); lay.appendChild(bub);
+    if(last){ const cr=last.getBoundingClientRect(); bub.style.left=(cr.right-sr.left+8)+'px'; bub.style.top=(cr.top-sr.top+cr.height/2)+'px'; }
+  });
+}
+
+/* ===== 연결(다중그룹, 왼쪽 번호) ===== */
+function activeChain(){ if(!view.chainGroups.length) view.chainGroups=[[]]; return view.chainGroups[view.chainGroups.length-1]; }
+function toggleChain(r,c){ const g=activeChain(), k=r+','+c, i=g.indexOf(k); if(i>=0)g.splice(i,1); else g.push(k); drawConn(); save(); }
+function drawConn(){
+  const inner=document.getElementById('inner'), svg=inner.querySelector('.connLayer'), sr=inner.getBoundingClientRect();
+  svg.setAttribute('width', inner.offsetWidth); svg.setAttribute('height', inner.offsetHeight); svg.innerHTML='';
+  inner.querySelectorAll('.chained').forEach(c=>{ c.classList.remove('chained'); c.style.boxShadow=''; });
+  const NS='http://www.w3.org/2000/svg';
+  view.chainGroups.forEach((g,gi)=>{ const color=CONN_PAL[gi%CONN_PAL.length];
+    const pts=g.map(k=>{ const [r,c]=k.split(',').map(Number); const cell=getCell(r,c); if(!cell) return null;
+      cell.classList.add('chained'); cell.style.boxShadow='inset 0 0 0 3px '+color;
+      const cr=cell.getBoundingClientRect(); return {x:cr.left-sr.left-12, y:cr.top-sr.top+cr.height/2}; }).filter(Boolean);
+    for(let i=0;i<pts.length-1;i++){ const a=pts[i],b=pts[i+1], my=(a.y+b.y)/2;
+      const p=document.createElementNS(NS,'path'); p.setAttribute('d',`M ${a.x} ${a.y} C ${a.x-24} ${my}, ${b.x-24} ${my}, ${b.x} ${b.y}`); p.style.stroke=color; svg.appendChild(p); }
+    pts.forEach((pt,idx)=>{ const ci=document.createElementNS(NS,'circle'); ci.setAttribute('cx',pt.x); ci.setAttribute('cy',pt.y); ci.setAttribute('r',12); ci.setAttribute('class','node'); ci.style.fill=color; svg.appendChild(ci);
+      const tx=document.createElementNS(NS,'text'); tx.setAttribute('x',pt.x); tx.setAttribute('y',pt.y); tx.setAttribute('class','nodeTxt'); tx.textContent=idx+1; svg.appendChild(tx); });
+  });
+}
+
+/* ===== 고정 ===== */
+function toggleFreeze(){
+  view.freeze=!view.freeze;
+  if(view.freeze && !view.frzRows && !view.frzCols){ view.frzRows=3; view.frzCols=1; }
+  document.getElementById('m-frz').classList.toggle('on', view.freeze);
+  applyFreeze(); save();
+}
+function applyFreeze(){
+  const inner=document.getElementById('inner'), tbl=inner.querySelector('table'); if(!tbl) return;
+  tbl.querySelectorAll('.ft,.fl,.ftlast,.fllast').forEach(c=>{ c.classList.remove('ft','fl','ftlast','fllast'); c.style.top=''; c.style.left=''; });
+  tbl.querySelectorAll('[data-fz]').forEach(c=>{ c.style.backgroundColor=''; c.removeAttribute('data-fz'); });
+  inner.classList.toggle('frz', view.freeze);
+  if(!view.freeze) return;
+  const fill=cell=>{ const bg=getComputedStyle(cell).backgroundColor; if(!bg||bg==='rgba(0, 0, 0, 0)'||bg==='transparent'){ cell.style.backgroundColor='#fff'; cell.dataset.fz='1'; } };
+  const allTrs=[...tbl.tHead.rows, ...tbl.tBodies[0].rows];
+  const top=Math.max(0,view.frzRows|0), left=Math.max(0,view.frzCols|0);
+  if(top>0){ let acc=0; const rows=allTrs.slice(0, top);
+    rows.forEach((tr,ti)=>{ [...tr.cells].forEach(c=>{ c.classList.add('ft'); if(ti===rows.length-1)c.classList.add('ftlast'); c.style.top=acc+'px'; if(c.tagName==='TD')fill(c); }); acc+=tr.offsetHeight; }); }
+  if(left>0){ const colW={}; tbl.querySelectorAll('[data-col]').forEach(cell=>{ if((cell.colSpan||1)===1){ const c=+cell.dataset.col; if(colW[c]===undefined&&cell.offsetWidth)colW[c]=cell.offsetWidth; } });
+    const leftOf=c=>{ let x=0; for(let i=0;i<c;i++) x+=(colW[i]||0); return x; };
+    allTrs.forEach(tr=>{ [...tr.cells].forEach(cell=>{ const dc=cell.dataset.col!==undefined?+cell.dataset.col:null;
+      if(dc!==null && dc<left){ cell.classList.add('fl'); if(dc===left-1)cell.classList.add('fllast'); cell.style.left=leftOf(dc)+'px'; if(cell.tagName==='TD')fill(cell); } }); }); }
+}
+
+/* ===== 터치 모드 ===== */
+function setMode(m){
+  if(m===mode && (m==='conn'||m==='sum')) newGroup();   // 같은 모드 재선택 = 새 묶음
+  mode=m;
+  ['move','hl','sum','conn'].forEach(k=> document.getElementById('m-'+k).classList.toggle('on', k===m));
+}
+function newGroup(){
+  if(mode==='conn'){ const g=activeChain(); if(g.length) view.chainGroups.push([]); }
+  else { const g=activePick(); if(g.length) view.pickGroups.push([]); setMode('sum'); }
+}
+function clearFx(){
+  view.rowHL.clear(); view.colHL.clear(); view.cellHL.clear(); view.chainGroups=[[]]; view.pickGroups=[[]];
+  applyHL(); renderPick(); drawConn(); save();
+}
+function onTap(e){
+  if(mode==='move') return;
+  const cell=e.target.closest('td[data-col],th[data-col]'); if(!cell) return;
+  const r=cell.dataset.row!==undefined?+cell.dataset.row:null, c=cell.dataset.col!==undefined?+cell.dataset.col:null;
+  if(mode==='hl'){
+    if(cell.tagName==='TH'){ if(c!=null){ view.colHL.has(c)?view.colHL.delete(c):view.colHL.add(c); } }   // 머리글 탭 = 열
+    else if(c===0){ if(r!=null){ view.rowHL.has(r)?view.rowHL.delete(r):view.rowHL.add(r); } }            // 담보(첫 열) 탭 = 행
+    else if(r!=null&&c!=null){ const k=r+','+c; view.cellHL.has(k)?view.cellHL.delete(k):view.cellHL.add(k); } // 그 외 = 칸
+    applyHL(); save();
+  } else if(mode==='sum'){ if(r!=null&&c!=null) togglePick(r,c); }
+  else if(mode==='conn'){ if(r!=null&&c!=null) toggleChain(r,c); }
+}
+
+/* ===== 확대(글자 크기) + 핀치 ===== */
+function zoom(d){ mfont=Math.max(11, Math.min(46, mfont+d*2)); document.documentElement.style.setProperty('--mf', mfont+'px'); setTimeout(()=>{ renderPick(); drawConn(); applyFreeze(); },0); save(); }
+let pinchD=0, pinchF=0;
+function dist(t){ const dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.hypot(dx,dy); }
+
+/* ===== 저장(현재 상태) ===== */
+function save(){ if(!M) return; try{ M.preso=Object.assign({}, M.preso, {
+  rowHL:[...view.rowHL], colHL:[...view.colHL], cellHL:[...view.cellHL],
+  chainGroups:view.chainGroups.map(g=>[...g]), pickGroups:view.pickGroups.map(g=>[...g]),
+  freeze:view.freeze, frzRows:view.frzRows, frzCols:view.frzCols, pFont:Math.round(mfont/0.8) });
+  localStorage.setItem('mobile_last', JSON.stringify(M)); }catch(e){} }
+
+/* ===== 파일/예시 ===== */
+function readFile(f){ if(!f) return; const fr=new FileReader(); fr.onload=()=>{ try{ loadModel(JSON.parse(fr.result)); }catch(e){ alert('JSON 파일을 읽을 수 없습니다.'); } }; fr.readAsText(f); }
+document.getElementById('file').addEventListener('change', e=> readFile(e.target.files[0]));
+document.getElementById('file2').addEventListener('change', e=> readFile(e.target.files[0]));
+function loadSample(){
+  loadModel({ name:'예시 담보표',
+    head:[{h:'담보명'},{h:'가입금액'},{h:'보험기간'},{h:'보험료'}],
+    rows:[
+      {cells:[{h:'상해사망'},{h:'1억원'},{h:'100세'},{h:'3,200'}]},
+      {cells:[{h:'질병사망'},{h:'5천만원'},{h:'100세'},{h:'8,500'}]},
+      {cells:[{h:'암진단비'},{h:'5천만원'},{h:'100세'},{h:'12,300'}]},
+      {cells:[{h:'뇌혈관진단비'},{h:'2천만원'},{h:'100세'},{h:'6,400'}]},
+      {cells:[{h:'심장질환진단비'},{h:'2천만원'},{h:'100세'},{h:'4,900'}]},
+    ], colHidden:[false,false,false,false], style:{headBg:'#3182f6',cellLine:'#c9ced6'},
+    preso:{ freeze:true, frzRows:1, frzCols:1 } });
+}
+
+/* ===== 이벤트 ===== */
+(function(){
+  const stage=document.getElementById('stage'), inner=document.getElementById('inner');
+  inner.addEventListener('click', onTap);
+  stage.addEventListener('touchstart', e=>{ if(e.touches.length===2){ pinchD=dist(e.touches); pinchF=mfont; } }, {passive:true});
+  stage.addEventListener('touchmove', e=>{ if(e.touches.length===2 && pinchD){ e.preventDefault(); const r=dist(e.touches)/pinchD; mfont=Math.max(11,Math.min(46, Math.round(pinchF*r))); document.documentElement.style.setProperty('--mf', mfont+'px'); } }, {passive:false});
+  stage.addEventListener('touchend', e=>{ if(pinchD && e.touches.length<2){ pinchD=0; renderPick(); drawConn(); applyFreeze(); save(); } });
+  window.addEventListener('resize', ()=>{ if(M){ renderPick(); drawConn(); applyFreeze(); } });
+  // 마지막 본 파일 복원
+  try{ const last=localStorage.getItem('mobile_last'); if(last) loadModel(JSON.parse(last)); }catch(e){}
+})();
+</script>
+</body>
+</html>
