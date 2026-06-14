@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보험 담보표 — 사용설명서</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{ --blue:#3182f6; --ink:#191f28; --sub:#6b7684; --line:#e5e8eb; --bg:#f2f4f6; }
+  *{box-sizing:border-box;}
+  body{margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:'Pretendard',-apple-system,sans-serif; line-height:1.65;}
+  .wrap{max-width:920px; margin:0 auto; padding:32px 20px 80px;}
+  header{background:linear-gradient(135deg,#3182f6,#0ea5e9); color:#fff; padding:36px 20px;}
+  header .inner{max-width:920px; margin:0 auto;}
+  header h1{margin:0 0 6px; font-size:26px;}
+  header p{margin:0; opacity:.95; font-size:14px;}
+  header a{color:#fff; font-weight:700;}
+  h2{font-size:20px; margin:34px 0 10px; padding-bottom:8px; border-bottom:2px solid var(--blue);}
+  h3{font-size:16px; margin:20px 0 6px; color:#0f3e8c;}
+  p,li{font-size:14.5px;}
+  ul,ol{padding-left:22px; margin:6px 0;}
+  li{margin:4px 0;}
+  .card{background:#fff; border-radius:16px; padding:18px 22px; margin:14px 0; box-shadow:0 4px 16px rgba(0,0,0,.05);}
+  kbd{background:#eef2f7; border:1px solid #d4dae2; border-bottom-width:2px; border-radius:6px; padding:1px 7px; font-size:13px; font-weight:700; font-family:inherit;}
+  .tag{display:inline-block; background:#eaf2ff; color:#1b64da; border-radius:999px; padding:2px 10px; font-size:12.5px; font-weight:700; margin-right:4px;}
+  .tip{background:#f0fbf4; border-left:4px solid #16a34a; padding:10px 14px; border-radius:8px; margin:10px 0; font-size:13.5px;}
+  .warn{background:#fff7ed; border-left:4px solid #f59e0b; padding:10px 14px; border-radius:8px; margin:10px 0; font-size:13.5px;}
+  table{border-collapse:collapse; width:100%; margin:10px 0; font-size:13.5px; background:#fff;}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left;}
+  th{background:#f6f8fb;}
+  .toc{columns:2; column-gap:24px;}
+  .toc a{color:var(--ink); text-decoration:none; font-size:14px;}
+  .toc a:hover{color:var(--blue); text-decoration:underline;}
+  .top{position:fixed; right:18px; bottom:18px; background:var(--blue); color:#fff; border:none;
+    border-radius:999px; padding:12px 16px; font-weight:700; cursor:pointer; box-shadow:0 8px 24px rgba(49,130,246,.4); font-family:inherit;}
+  code{background:#f1f4f7; padding:1px 6px; border-radius:5px; font-size:13px;}
+</style>
+</head>
+<body>
+<header><div class="inner">
+  <h1>🛡️ 보험 담보표 + 발표 모드 — 사용설명서</h1>
+  <p>엑셀 담보표를 불러와 꾸미고, 고객 앞에서 강조·연결·합산까지. <a href="collateral_table.html">← 도구 열기</a></p>
+</div></header>
+
+<div class="wrap">
+
+<div class="card">
+  <b>빠른 흐름</b>
+  <ol>
+    <li><b>📥 표 만들기</b>에서 엑셀 불러오기(또는 예시)</li>
+    <li>아래 <b>미리보기</b>에서 셀 클릭 수정 · <b>🎨 셀 선택·꾸미기</b>로 색/크기/병합/테두리</li>
+    <li><b>👁 담보·열 / 🧩 특약</b>으로 보여줄 항목만 추리기</li>
+    <li><b>💼 고객용 파일로 저장</b> → 발표용 파일 완성</li>
+    <li><b>🎬 발표 모드</b>에서 강조·연결·합산하며 상담</li>
+  </ol>
+</div>
+
+<h2>목차</h2>
+<div class="card toc">
+  <a href="#a">1. 표 만들기 / 불러오기</a><br>
+  <a href="#b">2. 시트 저장 · 고객용 파일</a><br>
+  <a href="#c">3. 담보 · 열 고르기</a><br>
+  <a href="#d">4. 디자인</a><br>
+  <a href="#e">5. 특약 골라 보기(대분류·중분류)</a><br>
+  <a href="#f">6. 셀 선택 · 꾸미기(색/병합/테두리/삭제)</a><br>
+  <a href="#g">7. 미리보기 확대 · 이미지 저장</a><br>
+  <a href="#h">8. 발표 모드 — 강조 · 연결 · 합산</a><br>
+  <a href="#i">9. 행/열 고정 · 확대(줌)</a><br>
+  <a href="#j">10. 발표 세팅 저장 · 재사용</a><br>
+  <a href="#k">11. 단축키 모음</a>
+</div>
+
+<h2 id="a">1. 표 만들기 / 불러오기</h2>
+<div class="card">
+  <p>상단 <span class="tag">📥 표 만들기</span> 버튼을 누르면 입력 창이 열립니다.</p>
+  <ul>
+    <li><b>📊 엑셀/CSV 파일 불러오기</b>: <code>.xlsx / .xls / .csv</code>. 엑셀의 <b>셀 병합·배경색·글자색·크기·굵기·정렬·열너비·행높이</b>까지 그대로 가져옵니다. (색·글꼴은 <code>.xlsx</code>에 스타일 정보가 있을 때)</li>
+    <li><b>붙여넣기</b>: 엑셀에서 범위 복사(<kbd>Ctrl</kbd>+<kbd>C</kbd>) → 입력칸에 붙여넣기(<kbd>Ctrl</kbd>+<kbd>V</kbd>) → "붙여넣기로 표 만들기".</li>
+    <li><b>빈 시트로 시작</b>: 담보(행)·열 수를 정해 빈 표 생성.</li>
+    <li><b>예시 데이터 불러오기</b>: 처음이라면 샘플로 감 잡기.</li>
+  </ul>
+  <div class="tip">표를 만들면 입력 창이 자동으로 닫히고, 아래 <b>미리보기</b>와 나머지 단계 버튼이 활성화됩니다.</div>
+  <p><b>직접 입력/수정</b>: 셀을 클릭해 바로 타이핑. <kbd>Tab</kbd>=다음 칸, <kbd>Enter</kbd>=칸 안 줄바꿈(2줄), <kbd>Shift</kbd>+<kbd>Enter</kbd>=아래 칸.</p>
+</div>
+
+<h2 id="b">2. 시트 저장 · 고객용 파일</h2>
+<div class="card">
+  <p><span class="tag">💾 시트 저장·불러오기</span> 버튼.</p>
+  <ul>
+    <li><b>이 시트 저장 / 불러오기</b>: 여러 담보 세트를 이 브라우저에 보관(자동 임시저장 포함).</li>
+    <li><b>📤 파일로 내보내기(.json)</b> / <b>📥 파일 불러오기</b>: 다른 PC·태블릿으로 옮길 때.</li>
+    <li><b>💼 고객용(발표) 파일로 저장</b> (미리보기 아래 버튼): 선택·색·병합 + <b>발표 세팅(연결·고정·강조 등)</b>까지 저장. 불러오면 "바로 발표 화면으로 열까요?"가 떠서 곧장 상담용으로 사용.</li>
+  </ul>
+</div>
+
+<h2 id="c">3. 담보 · 열 고르기</h2>
+<div class="card">
+  <p><span class="tag">👁 담보·열 고르기</span> — 발표·이미지에 <b>나올 항목만</b> 추립니다.</p>
+  <ul>
+    <li>담보(행)·열의 체크를 끄면 숨겨집니다. 검색창으로 담보 찾기, 전체 펼치기/숨기기/반전.</li>
+    <li>➕ 담보 추가 / ➕ 열 추가.</li>
+  </ul>
+</div>
+
+<h2 id="d">4. 디자인</h2>
+<div class="card">
+  <p><span class="tag">🎨 디자인</span> — 표 전체 모양.</p>
+  <ul>
+    <li>글자 크기 · 가로/세로 여백 · 정렬 · 헤더 색 · 테두리 색.</li>
+    <li><b>표 선 두께</b>(슬라이더 또는 숫자, 0=투명) — 전체 표 선 굵기/숨김.</li>
+    <li><b>표 라인</b>: 가로선/세로선 전체 on·off.</li>
+    <li>긴 글자 줄바꿈 허용.</li>
+  </ul>
+</div>
+
+<h2 id="e">5. 특약 골라 보기(대분류·중분류)</h2>
+<div class="card">
+  <p><span class="tag">🧩 특약 골라보기</span> — 계층형(대분류&gt;중분류&gt;금액) 표에서 원하는 묶음만.</p>
+  <ul>
+    <li><b>대분류·중분류 행 지정</b>: 엑셀 병합 헤더면 자동 추정(다르면 직접 선택, "행 목록 새로고침").</li>
+    <li><b>대분류 묶음 칩</b>: 체크 해제하면 그 특약(여러 열)이 통째로 접힘.</li>
+    <li><b>대분류 + 중분류 선택 → "이 묶음만 보기"</b>: 예) 암통합치료비·기본형 → 4천·8천·1억 열만. "전체 보기"로 복원.</li>
+    <li><b>빈 가로행 자동 숨기기</b>: 표시 중인 열 기준으로 값이 빈 항목 행을 자동 숨김.</li>
+  </ul>
+  <div class="tip"><b>표에서 우클릭</b>해도 됩니다 → 「이 열만 접기」 / 「이 묶음 전체 접기·보기」 / 「전체 펼치기」. 🎨 꾸미기에서 여러 열을 드래그 선택 후 우클릭하면 한꺼번에.</div>
+</div>
+
+<h2 id="f">6. 셀 선택 · 꾸미기</h2>
+<div class="card">
+  <p>미리보기 위 <span class="tag">🎨 셀 선택·꾸미기</span>를 켜면 화면 상단에 떠 있는 서식바가 나옵니다.</p>
+  <ul>
+    <li><b>선택</b>: 셀 클릭 / 드래그(범위) / <kbd>Shift</kbd>(연속) / <kbd>Ctrl</kbd>(개별 추가).</li>
+    <li><b>서식</b>: 셀 배경색, 글자색, 크기, <b>굵게</b>, 정렬.</li>
+    <li><b>셀 병합 / 병합 해제</b>(여러 셀 선택 후).</li>
+    <li><b>테두리(변별)</b>: 선 위치(전체/가로/세로/위/아래/왼쪽/오른쪽) + 색 + 두께 슬라이더(0=투명). 특정 변만 두껍게 하거나 없애기.</li>
+    <li><b>🙈 선택 열/행 감추기</b>, <b>🗑 행/열 삭제</b>.</li>
+  </ul>
+  <ul>
+    <li><b>너비·높이</b>: 열·행 경계를 마우스로 끌어 조절.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> 실행취소 / <kbd>Ctrl</kbd>+<kbd>Y</kbd> 다시실행.</li>
+  </ul>
+  <div class="warn">병합한 표에서 <b>행/열을 삭제</b>하면 겹치는 병합만 안전하게 풀리고, 나머지 셀의 테두리는 그대로 유지됩니다. 한 열만 감춰도 묶음 머리글은 남은 열 위로 자동 이동합니다.</div>
+</div>
+
+<h2 id="g">7. 미리보기 확대 · 이미지 저장</h2>
+<div class="card">
+  <ul>
+    <li><b>🔍 확대/축소</b>(미리보기 위): 화면에서만 키워 보며 편집. 저장 이미지는 항상 100% 기준.</li>
+    <li><b>💾 이미지로 저장(PNG)</b> / <b>📎 이미지 복사</b>: 체크 해제한 담보·열과 편집선은 빠진 깔끔한 표만 저장됩니다.</li>
+  </ul>
+</div>
+
+<h2 id="h">8. 발표 모드 — 강조 · 연결 · 합산</h2>
+<div class="card">
+  <p>미리보기에서 <span class="tag">🎬 발표 모드 시작</span>. 도구는 화면 <b>하단 바</b>에 있습니다.</p>
+  <h3>형광펜(강조)</h3>
+  <ul>
+    <li><b>🖍 행 / 🖍 열 / 🖌 칸</b> 모드를 고르고 표를 클릭·드래그 → 그 행/열/칸이 강조됩니다.</li>
+    <li>왼쪽 <b>⋮</b>·위쪽 <b>⋯</b> 핸들을 클릭/드래그해도 그 줄 전체가 강조됩니다.</li>
+    <li>색 구분: <b>행=노랑, 열=하늘, 행+열 교차=로즈, 칸=노랑</b>(하단 색칸에서 변경).</li>
+  </ul>
+  <h3>🔗 담보 연결</h3>
+  <ul>
+    <li><b>연결</b> 모드에서 연결할 <b>칸을 순서대로 클릭</b>합니다. 큰 항목뿐 아니라 <b>세부항목 칸</b>(예: 암수술 ↔ 다빈치로봇수술)도 콕 집어 연결.</li>
+    <li><b>3개·4개 이상</b> 연결 가능. 칸 사이를 곡선 + 순번(①②③)으로 잇고, 연결된 칸은 테두리로 표시. 다시 클릭하면 해제.</li>
+  </ul>
+  <h3>💬 합계 말풍선 / 💰 합산 보험금</h3>
+  <ul>
+    <li><b>합계 말풍선</b>: 그 열의 합계를 말풍선으로 표시(강조한 담보만 합산).</li>
+    <li><b>합산 보험금</b>: 금액열을 골라, 강조한 담보들의 금액을 <b>덧셈식 + 총합</b>으로 보여주고 해당 칸을 자동 강조.</li>
+  </ul>
+  <h3>그 외</h3>
+  <ul>
+    <li><b>🔦 집중</b>: 강조한 담보만 또렷하게(나머지 흐리게).</li>
+    <li><b>🧹 지우기</b>: 모든 효과 제거. <b>↶/↷</b> 또는 <kbd>Ctrl</kbd>+<kbd>Z</kbd>/<kbd>Ctrl</kbd>+<kbd>Y</kbd>로 단계 되돌리기.</li>
+    <li><b>💾 화면 저장</b>: 현재 발표 화면을 이미지로.</li>
+  </ul>
+</div>
+
+<h2 id="i">9. 행/열 고정 · 확대(줌)</h2>
+<div class="card">
+  <ul>
+    <li><b>🧊 고정</b>: 머리글(제목·대분류·중분류 행)과 왼쪽 담보 라벨열을 고정. 좌우/상하로 스크롤해도 <b>이 금액이 어떤 담보·어떤 금액인지</b> 항상 보입니다.</li>
+    <li><b>확대/축소</b>: <kbd>Ctrl</kbd>+휠(또는 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+휠) → 발표 표만 커지고/작아집니다(도구바는 고정). 하단 <b>크기</b> 슬라이더로도 조절.</li>
+  </ul>
+</div>
+
+<h2 id="j">10. 발표 세팅 저장 · 재사용</h2>
+<div class="card">
+  <p>발표 중 만든 <b>연결·강조·고정·합산·크기·말풍선</b> 세팅은 파일에 함께 저장됩니다.</p>
+  <ol>
+    <li>발표 모드에서 원하는 대로 강조·연결·고정을 세팅.</li>
+    <li>편집으로 나와 <b>💼 고객용(발표) 파일로 저장</b>.</li>
+    <li>나중에 그 파일을 <b>📥 파일 불러오기</b> → 발표 진입 시 세팅이 <b>그대로 복원</b>됩니다.</li>
+  </ol>
+  <div class="tip">고객별로 다른 발표 파일을 미리 만들어 두면, 상담 때 불러와서 바로 보여줄 수 있습니다.</div>
+</div>
+
+<h2 id="k">11. 단축키 모음</h2>
+<div class="card">
+  <table>
+    <tr><th>키</th><th>기능</th></tr>
+    <tr><td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>다음/이전 칸 이동(편집)</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>칸 안에서 줄바꿈(2줄)</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>아래 칸으로 이동</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>실행취소 / 다시실행 (편집·발표 각각)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+휠</td><td>발표 표 확대/축소</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>모달/발표 닫기</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> → <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>엑셀 범위 복사 후 붙여넣기로 표 만들기</td></tr>
+  </table>
+</div>
+
+<p style="text-align:center; margin-top:30px;"><a href="collateral_table.html" style="font-weight:700; color:var(--blue);">← 도구로 돌아가기</a></p>
+</div>
+
+<button class="top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑ 위로</button>
+</body>
+</html>
