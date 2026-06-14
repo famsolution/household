@@ -194,6 +194,10 @@
   #presoStage.frz #presoTable .frz-t{position:sticky; z-index:30;}
   #presoStage.frz #presoTable .frz-l{position:sticky; z-index:25;}
   #presoStage.frz #presoTable .frz-t.frz-l{z-index:38;}
+  /* 엑셀 틀고정처럼 고정 경계선(그림자) 표시 */
+  #presoStage.frz #presoTable .frz-t-last{box-shadow:0 4px 6px -2px rgba(0,0,0,.35);}
+  #presoStage.frz #presoTable .frz-l-last{box-shadow:4px 0 6px -2px rgba(0,0,0,.35);}
+  #presoStage.frz #presoTable .frz-t-last.frz-l-last{box-shadow:4px 4px 6px -2px rgba(0,0,0,.35);}
   #presoStage.frz #presoTable .head-row th.frz-t, #presoStage.frz #presoTable .handle-row th.frz-t{z-index:34;}
 
   /* 형광펜 스윕 애니메이션 — 행/열/교차 색 구분 */
@@ -1966,7 +1970,7 @@ function onFreezeInput(){
 function freezePreso(){
   const stage=document.getElementById('presoStage'), tbl=document.getElementById('presoTable'); if(!tbl) return;
   // 초기화: 고정 클래스/위치 + 내가 채운 배경만 원복(원래 색은 건드리지 않음)
-  tbl.querySelectorAll('.frz-t,.frz-l').forEach(c=>{ c.classList.remove('frz-t','frz-l'); c.style.top=''; c.style.left=''; });
+  tbl.querySelectorAll('.frz-t,.frz-l,.frz-t-last,.frz-l-last').forEach(c=>{ c.classList.remove('frz-t','frz-l','frz-t-last','frz-l-last'); c.style.top=''; c.style.left=''; });
   tbl.querySelectorAll('[data-frzfill]').forEach(c=>{ c.style.backgroundColor=''; c.removeAttribute('data-frzfill'); });
   stage.classList.toggle('frz', preso.freeze);
   document.getElementById('preso').style.textAlign = preso.freeze ? 'left' : '';
@@ -1978,8 +1982,8 @@ function freezePreso(){
   const left = Math.max(0, parseInt(preso.frzCols)||0);
   // 위 고정: 지정한 행 수(제목행부터) + 맨 위 ⋯ 핸들행 자동 포함
   if(top>0){
-    let acc=44;
-    allTrs.slice(0, top+1).forEach(tr=>{ [...tr.cells].forEach(c=>{ c.classList.add('frz-t'); c.style.top=acc+'px'; fill(c); }); acc+=tr.offsetHeight; });
+    let acc=44; const topRows=allTrs.slice(0, top+1);
+    topRows.forEach((tr,ti)=>{ [...tr.cells].forEach(c=>{ c.classList.add('frz-t'); if(ti===topRows.length-1) c.classList.add('frz-t-last'); c.style.top=acc+'px'; fill(c); }); acc+=tr.offsetHeight; });
   }
   // 왼쪽 고정: ⋮ 핸들열 + 지정한 데이터 열 수(왼쪽부터)
   if(left>0){
@@ -1990,7 +1994,7 @@ function freezePreso(){
     allTrs.forEach(tr=>{ [...tr.cells].forEach(cell=>{
       if(cell.classList.contains('rhandle')||cell.classList.contains('corner')||cell.classList.contains('rhandle-corner')){ cell.classList.add('frz-l'); cell.style.left='0px'; fill(cell); return; }
       const dc = cell.dataset.col!==undefined ? +cell.dataset.col : null;
-      if(dc!==null && dc<left){ cell.classList.add('frz-l'); cell.style.left=leftOf(dc)+'px'; fill(cell); }
+      if(dc!==null && dc<left){ cell.classList.add('frz-l'); if(dc===left-1) cell.classList.add('frz-l-last'); cell.style.left=leftOf(dc)+'px'; fill(cell); }
     }); });
   }
 }
