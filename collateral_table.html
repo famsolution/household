@@ -154,20 +154,22 @@
          background:var(--stageBg,#0f172a); padding:0 0 60px;}
   #preso.on{display:block;}
   #presoTable td.cellhl{ background-color:var(--cellHlColor,#fde047) !important; }
-  #presoBar{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:1100;
-    display:flex; gap:6px; flex-wrap:wrap; align-items:center; max-width:96vw;
-    background:rgba(255,255,255,.96); backdrop-filter:blur(6px);
-    padding:8px; border-radius:14px; box-shadow:0 10px 34px rgba(0,0,0,.4);}
+  /* 발표 도구모음 — 하단바, 기능 그룹별로 1행(넘치면 2행) */
+  #presoBar{position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:1100;
+    display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px 14px; max-width:97vw;
+    background:rgba(255,255,255,.97); backdrop-filter:blur(6px);
+    padding:8px 12px; border-radius:14px; box-shadow:0 -6px 34px rgba(0,0,0,.4);}
+  #presoBar .bar-grp{display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px;}
   #presoBar button{padding:9px 12px; font-size:13px; border-radius:10px; background:#eef2f7; color:#2b3440; font-weight:600;}
   #presoBar button.active{background:var(--blue); color:#fff; box-shadow:0 4px 10px rgba(49,130,246,.35);}
   #presoBar .sep{width:1px; align-self:stretch; background:#dfe3e8; margin:2px;}
   #presoBar .ci{display:flex; align-items:center; gap:4px; font-size:12px; color:#4e5968;}
-  #presoBar input[type=color]{width:30px; height:26px; border:none; border-radius:6px; padding:0; background:none; cursor:pointer;}
+  #presoBar input[type=color]{width:28px; height:26px; border:none; border-radius:6px; padding:0; background:none; cursor:pointer;}
   #presoBar input[type=range]{width:90px; accent-color:var(--blue);}
-  #presoHint{position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:1100;
-    color:rgba(255,255,255,.8); font-size:13px; background:rgba(0,0,0,.35); padding:8px 14px; border-radius:999px;}
+  #presoHint{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:1100;
+    color:rgba(255,255,255,.82); font-size:13px; background:rgba(0,0,0,.35); padding:7px 14px; border-radius:999px; max-width:94vw; text-align:center;}
 
-  #presoStage{display:inline-block; position:relative; margin:120px 56px 40px; padding-left:70px; user-select:none;}
+  #presoStage{display:inline-block; position:relative; margin:64px 56px 130px; padding-left:70px; user-select:none;}
   #presoStage.capture .handle-row, #presoStage.capture .rhandle,
   #presoStage.capture .corner, #presoStage.capture .rhandle-corner{visibility:hidden;}
 
@@ -186,6 +188,13 @@
   #presoTable .rhandle{cursor:grab; width:26px;}
   #presoTable .chandle:hover, #presoTable .rhandle:hover{background:#dce8ff; color:var(--blue);}
   #presoTable .chandle.sel, #presoTable .rhandle.sel{background:var(--blue); color:#fff;}
+
+  /* 행/열 고정(sticky) */
+  #presoStage.frz #presoTable .frz-t{position:sticky; z-index:30;}
+  #presoStage.frz #presoTable .frz-l{position:sticky; z-index:25; background-color:#fff;}
+  #presoStage.frz #presoTable tr.phead td.frz-t{background-color:#fff;}
+  #presoStage.frz #presoTable .frz-t.frz-l{z-index:38;}
+  #presoStage.frz #presoTable .head-row th.frz-t, #presoStage.frz #presoTable .handle-row th.frz-t{z-index:34;}
 
   /* 형광펜 스윕 애니메이션 — 행/열/교차 색 구분 */
   #presoTable td.rhl::after, #presoTable th.rhl::after,
@@ -271,7 +280,8 @@
 
 <!-- 1.5 시트 저장/불러오기 -->
 <div class="card" id="sheetCard" style="display:none;">
-  <h2>💾 시트 저장 · 불러오기 (여러 담보 세트 보관)</h2>
+  <h2 style="cursor:pointer; user-select:none;" onclick="toggleCard('sheetBody',this)"><span class="caret">▶</span> 💾 시트 저장 · 불러오기 (여러 담보 세트 보관)</h2>
+  <div id="sheetBody" style="display:none;">
   <div class="opts">
     <div class="opt">시트 이름<input type="text" id="sheetName" placeholder="예) 암통합치료비" style="width:180px; padding:8px 10px; border:1px solid var(--line); border-radius:10px;"></div>
     <button class="btn-primary" onclick="saveSheet()">💾 이 시트 저장</button>
@@ -285,6 +295,7 @@
     <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importJSON(this.files[0])">
   </div>
   <p class="hint">저장은 이 브라우저에 보관됩니다(자동 임시저장 포함). 다른 PC·미러링 기기로 옮길 땐 "파일로 내보내기"를 쓰세요.</p>
+  </div>
 </div>
 
 <!-- 2. 담보/열 표시 -->
@@ -311,7 +322,8 @@
 
 <!-- 3. 디자인 옵션 -->
 <div class="card" id="optCard" style="display:none;">
-  <h2>③ 디자인 커스텀 (가로 · 세로)</h2>
+  <h2 style="cursor:pointer; user-select:none;" onclick="toggleCard('optBody',this)"><span class="caret">▶</span> ③ 디자인 커스텀 (글자·여백·색·선)</h2>
+  <div id="optBody" style="display:none;">
   <div class="opts">
     <div class="opt">글자 크기 <span id="vFont">14px</span>
       <input type="range" id="font" min="10" max="26" value="14" oninput="applyStyle()"></div>
@@ -344,11 +356,13 @@
         <label class="switch"><input type="checkbox" id="vLines" checked onchange="applyStyle()"> 세로선</label>
       </div></div>
   </div>
+  </div>
 </div>
 
 <!-- 3.5 특약(대분류·중분류) 골라 보기 -->
 <div class="card" id="groupCard" style="display:none;">
-  <h2>🧩 특약 골라 보기 — 대분류·중분류 선택, 빈 가로행 자동 숨김</h2>
+  <h2 style="cursor:pointer; user-select:none;" onclick="toggleCard('groupBody',this)"><span class="caret">▶</span> 🧩 특약 골라 보기 — 대분류·중분류 선택, 빈 가로행 자동 숨김</h2>
+  <div id="groupBody" style="display:none;">
   <div class="opts" style="margin-bottom:10px;">
     <div class="opt">대분류가 적힌 행
       <select id="daeRow" onchange="refreshDaeOptions()"></select></div>
@@ -368,6 +382,7 @@
     <button class="btn-ghost" onclick="resetGroup()">전체 보기</button>
   </div>
   <p class="hint">예) <b>대분류</b>=암통합치료비, <b>중분류</b>=기본형 → 기본형(4천·8천·1억) 열만 표시되고, 값이 비어 있는 통합치료항목(가로행)은 자동으로 숨겨집니다. 이 상태로 <b>💼 고객용(발표) 파일로 저장</b>하면 그대로 발표 화면으로 열립니다.</p>
+  </div>
 </div>
 
 <!-- 4. 결과 표 + 저장 -->
@@ -443,34 +458,37 @@
 <!-- ===== 발표(프레젠테이션) 모드 오버레이 ===== -->
 <div id="preso">
   <div id="presoBar">
-    <button onclick="exitPreso()">✏️ 편집으로</button>
-    <button id="p-undo" onclick="presoUndo()" disabled>↶</button>
-    <button id="p-redo" onclick="presoRedo()" disabled>↷</button>
-    <span class="sep"></span>
-    <button id="m-rowhl"   onclick="setPresoMode('rowhl')">🖍 행 강조</button>
-    <button id="m-colhl"   onclick="setPresoMode('colhl')">🖍 열 강조</button>
-    <button id="m-cellhl"  onclick="setPresoMode('cellhl')">🖌 칸 강조</button>
-    <button id="m-bubble"  onclick="setPresoMode('bubble')">💬 합계 말풍선</button>
-    <button id="m-connect" onclick="setPresoMode('connect')">🔗 담보 연결</button>
-    <span class="sep"></span>
-    <button id="m-sum" onclick="toggleSumPanel()">💰 합산 보험금</button>
-    <span class="ci">금액열<select id="sumCol" onchange="refreshSum()"></select></span>
-    <span class="sep"></span>
-    <button id="m-dim" onclick="toggleDim()">🔦 집중</button>
-    <button onclick="clearEffects()">🧹 효과 지우기</button>
-    <button onclick="savePresoImage()">💾 화면 저장</button>
-    <span class="sep"></span>
-    <span class="ci">행강조<input type="color" id="hlColor"     value="#ffe44d" oninput="applyPresoColors()"></span>
-    <span class="ci">열강조<input type="color" id="colHlColor"  value="#38bdf8" oninput="applyPresoColors()"></span>
-    <span class="ci">교차<input type="color" id="xHlColor"    value="#fb7185" oninput="applyPresoColors()"></span>
-    <span class="ci">칸색<input type="color" id="cellHlColor" value="#fde047" oninput="applyPresoColors()"></span>
-    <span class="ci">연결선<input type="color" id="connColor"   value="#ff5a5f" oninput="applyPresoColors()"></span>
-    <span class="ci">말풍선<input type="color" id="bubbleColor" value="#111827" oninput="applyPresoColors()"></span>
-    <span class="ci">헤더<input type="color" id="pHeadBg"       value="#3182f6" oninput="applyPresoColors()"></span>
-    <span class="ci">배경<input type="color" id="stageBg"       value="#0f172a" oninput="applyPresoColors()"></span>
-    <span class="ci">크기<input type="range" id="pFont" min="14" max="42" value="24" oninput="applyPresoColors()"></span>
+    <div class="bar-grp">
+      <button onclick="exitPreso()">✏️ 편집</button>
+      <button id="p-undo" onclick="presoUndo()" disabled>↶</button>
+      <button id="p-redo" onclick="presoRedo()" disabled>↷</button>
+      <span class="sep"></span>
+      <button id="m-rowhl"   onclick="setPresoMode('rowhl')">🖍 행</button>
+      <button id="m-colhl"   onclick="setPresoMode('colhl')">🖍 열</button>
+      <button id="m-cellhl"  onclick="setPresoMode('cellhl')">🖌 칸</button>
+      <button id="m-bubble"  onclick="setPresoMode('bubble')">💬 말풍선</button>
+      <button id="m-connect" onclick="setPresoMode('connect')">🔗 연결</button>
+      <span class="sep"></span>
+      <button id="m-sum" onclick="toggleSumPanel()">💰 합산</button>
+      <span class="ci">금액열<select id="sumCol" onchange="refreshSum()"></select></span>
+      <button id="m-dim" onclick="toggleDim()">🔦 집중</button>
+      <button id="m-freeze" onclick="toggleFreeze()">🧊 고정</button>
+      <button onclick="clearEffects()">🧹 지우기</button>
+      <button onclick="savePresoImage()">💾 저장</button>
+    </div>
+    <div class="bar-grp bar-sub">
+      <span class="ci">크기<input type="range" id="pFont" min="10" max="80" value="24" oninput="applyPresoColors()"></span>
+      <span class="ci">행<input type="color" id="hlColor"     value="#ffe44d" oninput="applyPresoColors()"></span>
+      <span class="ci">열<input type="color" id="colHlColor"  value="#38bdf8" oninput="applyPresoColors()"></span>
+      <span class="ci">교차<input type="color" id="xHlColor"    value="#fb7185" oninput="applyPresoColors()"></span>
+      <span class="ci">칸<input type="color" id="cellHlColor" value="#fde047" oninput="applyPresoColors()"></span>
+      <span class="ci">연결<input type="color" id="connColor"   value="#ff5a5f" oninput="applyPresoColors()"></span>
+      <span class="ci">말풍선<input type="color" id="bubbleColor" value="#111827" oninput="applyPresoColors()"></span>
+      <span class="ci">헤더<input type="color" id="pHeadBg"       value="#3182f6" oninput="applyPresoColors()"></span>
+      <span class="ci">배경<input type="color" id="stageBg"       value="#0f172a" oninput="applyPresoColors()"></span>
+    </div>
   </div>
-  <div id="presoHint">왼쪽 ⋮ 핸들을 드래그하면 담보(행), 위쪽 ⋯ 핸들을 드래그하면 열에 형광펜이 켜집니다. 모드를 바꿔 말풍선·연결도 사용하세요.</div>
+  <div id="presoHint">⋮(왼쪽)·⋯(위쪽) 핸들 드래그 = 행/열 형광 · Ctrl+Alt+휠 = 확대/축소 · 🧊 고정으로 머리글·담보 고정</div>
   <div id="presoStage">
     <svg class="connLayer"></svg>
     <div class="bubbleLayer"></div>
@@ -1655,7 +1673,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideCtx(); });
    🎬 발표(프레젠테이션) 모드
    ========================================================== */
 const SVGNS = 'http://www.w3.org/2000/svg';
-const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false };
+const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false, freeze:false };
 
 /* ---------- 발표 모드 실행취소/다시실행 ---------- */
 let presoHist=[], presoIdx=-1, _presoRestoring=false, _presoHistT=null;
@@ -1756,7 +1774,16 @@ function getVisibleGrid(){
     });
     rows.push(out);
   });
-  return { head, rows };
+  // 고정용 메타데이터: 머리행(대분류·중분류) 인덱스 + 왼쪽 라벨열 수
+  const k2i = k => k==='head' ? 0 : (+k+1);
+  const daeIdx=k2i(document.getElementById('daeRow').value), jungIdx=k2i(document.getElementById('jungRow').value);
+  const hdrRows=new Set();
+  visRowsIdx.forEach((r,i)=>{ if(r===daeIdx || r===jungIdx) hdrRows.add(i); });
+  // 라벨열 수 = 금액(중분류)행에서 값이 비어있는 왼쪽 연속 열(항목·세부·지급횟수 등)
+  const jungVals=effValsForRow(document.getElementById('jungRow').value);
+  let labelCols=0; for(const c of visCols){ if(((jungVals[c]||'')+'').trim()==='') labelCols++; else break; }
+  if(labelCols<1 || labelCols>=visCols.length) labelCols=1;
+  return { head, rows, hdrRows, labelCols };
 }
 
 function applyPresoCellStyle(e,cd){
@@ -1782,14 +1809,17 @@ function buildPresoTable(grid){
   thead.appendChild(headr);
   tbl.appendChild(thead);
 
+  const labelCols = grid.labelCols||0;
   // 본문
   const tbody = document.createElement('tbody');
   grid.rows.forEach((row,r)=>{
     const tr = document.createElement('tr'); tr.dataset.row=r;
+    if(grid.hdrRows && grid.hdrRows.has(r)) tr.classList.add('phead');   // 머리행(고정 대상)
     const rh = el('td','rhandle','⋮'); rh.dataset.row=r; tr.appendChild(rh);
     row.forEach(cd=>{
       const td = document.createElement('td');
       if(cd.c===0) td.classList.add('name-cell');
+      if(cd.c < labelCols) td.classList.add('plabel');   // 왼쪽 라벨열(고정 대상)
       td.innerHTML = cd.h!=null?cd.h:textToHtml(cd.text||'');
       td.dataset.row=r; td.dataset.col=cd.c;
       if(cd.cs>1) td.colSpan=cd.cs; if(cd.rs>1) td.rowSpan=cd.rs;
@@ -1826,18 +1856,57 @@ function enterPreso(){
   document.getElementById('sumPanel').classList.remove('on');
 
   bindPresoEvents(newTbl);
+  preso.freeze = false; document.getElementById('m-freeze').classList.remove('active');
   setPresoMode('rowhl');
   applyPresoColors();
   document.getElementById('preso').classList.add('on');
-  adjustPresoLayout();   // 상단 바 높이에 맞춰 표를 그 아래로 내림(바가 표를 가리지 않게)
+  adjustPresoLayout();   // 하단 바 높이만큼 아래 여백 확보(바가 표를 가리지 않게)
   presoHist=[]; presoIdx=-1; _presoRestoring=false; pushPresoHistory();   // 발표 모드 되돌리기 기준점
 }
-/* 상단 바(여러 줄로 늘어날 수 있음)가 표를 가리지 않도록 표 시작 위치를 바 높이에 맞춤 */
+/* 하단 바가 표를 가리지 않도록 아래 여백을 바 높이에 맞춤 */
 function adjustPresoLayout(){
-  const bar=document.getElementById('presoBar'), stage=document.getElementById('presoStage');
-  if(bar && stage){ stage.style.marginTop = Math.max(110, bar.offsetHeight + 30) + 'px'; }
+  const bar=document.getElementById('presoBar'), preso0=document.getElementById('preso');
+  if(bar && preso0){ preso0.style.paddingBottom = (bar.offsetHeight + 30) + 'px'; }
 }
-function exitPreso(){ document.getElementById('preso').classList.remove('on'); }
+function exitPreso(){ document.getElementById('preso').classList.remove('on'); document.getElementById('preso').style.textAlign=''; }
+
+/* ---------- 행/열 고정(머리글·담보) ---------- */
+function toggleFreeze(){
+  preso.freeze=!preso.freeze;
+  document.getElementById('m-freeze').classList.toggle('active', preso.freeze);
+  freezePreso();
+}
+function freezePreso(){
+  const stage=document.getElementById('presoStage'), tbl=document.getElementById('presoTable'); if(!tbl) return;
+  tbl.querySelectorAll('.frz-t,.frz-l').forEach(c=>{ c.classList.remove('frz-t','frz-l'); c.style.top=''; c.style.left=''; });
+  stage.classList.toggle('frz', preso.freeze);
+  document.getElementById('preso').style.textAlign = preso.freeze ? 'left' : '';
+  if(!preso.freeze) return;
+  // 위: 머리글(thead) + 머리행(phead)까지 — 위에서부터 누적 top
+  const bodyTrs=[...tbl.tBodies[0].rows];
+  let maxHdr=-1; bodyTrs.forEach((tr,i)=>{ if(tr.classList.contains('phead')) maxHdr=Math.max(maxHdr,i); });
+  const topTrs=[...tbl.tHead.rows, ...bodyTrs.slice(0, maxHdr+1)];
+  let topAcc=48;
+  topTrs.forEach(tr=>{ const h=tr.getBoundingClientRect().height||0; [...tr.cells].forEach(c=>{ c.classList.add('frz-t'); c.style.top=topAcc+'px'; }); topAcc+=h; });
+  // 왼쪽: ⋮ 핸들열 + 라벨열(plabel) — 왼쪽부터 누적 left
+  const rhCell=tbl.querySelector('tbody .rhandle')||tbl.querySelector('.rhandle-corner');
+  const rhW=rhCell?rhCell.getBoundingClientRect().width:0;
+  const colW={};
+  tbl.querySelectorAll('[data-col]').forEach(cell=>{ if((cell.colSpan||1)===1){ const c=+cell.dataset.col, w=cell.getBoundingClientRect().width; if(colW[c]===undefined && w) colW[c]=w; } });
+  let maxLab=-1; tbl.querySelectorAll('.plabel').forEach(c=>{ maxLab=Math.max(maxLab, +c.dataset.col); });
+  const leftOf={}; let acc=rhW; for(let c=0;c<=maxLab;c++){ leftOf[c]=acc; acc+=(colW[c]||0); }
+  tbl.querySelectorAll('.rhandle, .corner, .rhandle-corner').forEach(c=>{ c.classList.add('frz-l'); c.style.left='0px'; });
+  tbl.querySelectorAll('.plabel').forEach(c=>{ c.classList.add('frz-l'); c.style.left=(leftOf[+c.dataset.col]||0)+'px'; });
+}
+/* Ctrl+Alt+휠 = 발표 자료 확대/축소(크기 슬라이더 연동) */
+document.getElementById('preso').addEventListener('wheel', e=>{
+  if(e.ctrlKey && e.altKey){
+    e.preventDefault();
+    const inp=document.getElementById('pFont');
+    let v=Math.round(+inp.value + (e.deltaY<0 ? 2 : -2));
+    v=Math.max(10, Math.min(80, v)); inp.value=v; applyPresoColors();
+  }
+}, {passive:false});
 
 function setPresoMode(m){
   preso.mode = m;
@@ -1857,7 +1926,7 @@ function bindPresoEvents(tbl){
   tbl.addEventListener('click', presoClick);
 }
 window.addEventListener('pointerup', ()=>{ preso.painting=null; });
-window.addEventListener('resize', ()=>{ if(document.getElementById('preso').classList.contains('on')){ adjustPresoLayout(); repositionAll(); } });
+window.addEventListener('resize', ()=>{ if(document.getElementById('preso').classList.contains('on')){ adjustPresoLayout(); if(preso.freeze) freezePreso(); repositionAll(); } });
 
 function presoDown(e){
   const cell = e.target.closest('td,th'); if(!cell) return;
@@ -2122,6 +2191,8 @@ function applyPresoColors(){
   R.setProperty('--pHeadBg',     g('pHeadBg'));
   R.setProperty('--stageBg',     g('stageBg'));
   R.setProperty('--pFont',       document.getElementById('pFont').value + 'px');
+  if(preso.freeze) freezePreso();   // 크기 변경 시 고정 위치 재계산
+  adjustPresoLayout();
   repositionAll();
 }
 
