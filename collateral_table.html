@@ -160,8 +160,8 @@
   #presoTable .picknum{ position:absolute; top:2px; left:2px; min-width:18px; height:18px; line-height:18px;
     padding:0 4px; border-radius:999px; background:#16a34a; color:#fff; font-size:12px; font-weight:800;
     text-align:center; z-index:6; pointer-events:none; }
-  .bubble.picksum-bubble{ background:#16a34a; }
-  .bubble.picksum-bubble::after{ border-top-color:#16a34a; }
+  .bubble.picksum-bubble{ background:#16a34a; transform:translateY(-50%); animation:none; }
+  .bubble.picksum-bubble::after{ display:none; }
   /* 발표 도구모음 — 하단바, 기능 그룹별로 1행(넘치면 2행) */
   #presoBar{position:fixed; left:0; right:0; bottom:0; z-index:1100;
     display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px 20px;
@@ -533,7 +533,7 @@
       <span class="ci">배경<input type="color" id="stageBg"       value="#0f172a" oninput="applyPresoColors()"></span>
     </div>
   </div>
-  <div id="presoHint">⋮·⋯ 핸들 = 행/열 형광 · 🔗 연결 / 🧮 값 합계: 칸 클릭(번호+합계) · 우클릭 = 빠른 메뉴 · Ctrl+휠 = 확대/축소 · 🧊 옆 행·열 숫자로 고정</div>
+  <div id="presoHint">🔗 연결(번호 왼쪽) / 🧮 값 합계(말풍선 오른쪽): 칸 클릭 · 같은 버튼 다시 누르면 '새 그룹' · 우클릭 = 빠른 메뉴 · Ctrl+휠 = 확대 · 🧊 옆 행·열 숫자로 고정</div>
   <div id="presoStage">
     <svg class="connLayer"></svg>
     <div class="bubbleLayer"></div>
@@ -1729,13 +1729,15 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideCtx(); });
    🎬 발표(프레젠테이션) 모드
    ========================================================== */
 const SVGNS = 'http://www.w3.org/2000/svg';
-const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], pick:[], pickBubble:null, bubbles:new Map(), painting:null, dim:false, sumOn:false, freeze:false, frzRows:0, frzCols:0 };
+const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chainGroups:[[]], pickGroups:[[]], pickBubbles:[], bubbles:new Map(), painting:null, dim:false, sumOn:false, freeze:false, frzRows:0, frzCols:0 };
+const CONN_PALETTE=['#ff5a5f','#16a34a','#f59e0b','#a855f7','#0ea5e9','#e11d48'];
+const PICK_PALETTE=['#16a34a','#2563eb','#f59e0b','#a855f7','#0ea5e9','#e11d48'];
 
 /* ---------- 발표 모드 실행취소/다시실행 ---------- */
 let presoHist=[], presoIdx=-1, _presoRestoring=false, _presoHistT=null;
 function presoSnapshot(){
   return JSON.stringify({
-    rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL], chain:[...preso.chain], pick:[...preso.pick],
+    rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL], chainGroups:preso.chainGroups.map(g=>[...g]), pickGroups:preso.pickGroups.map(g=>[...g]),
     dim:preso.dim, sumOn:preso.sumOn,
     bubbles:[...preso.bubbles.entries()].map(([k,el])=>[k, el.innerHTML])
   });
@@ -1756,7 +1758,9 @@ function updatePresoUndo(){
 function restorePresoState(s){
   _presoRestoring=true;
   const st=JSON.parse(s);
-  preso.rowHL=new Set(st.rowHL); preso.colHL=new Set(st.colHL); preso.cellHL=new Set(st.cellHL||[]); preso.chain=st.chain.slice(); preso.pick=(st.pick||[]).slice();
+  preso.rowHL=new Set(st.rowHL); preso.colHL=new Set(st.colHL); preso.cellHL=new Set(st.cellHL||[]);
+  preso.chainGroups = st.chainGroups ? st.chainGroups.map(g=>g.slice()) : (st.chain?[st.chain.slice()]:[[]]);
+  preso.pickGroups = st.pickGroups ? st.pickGroups.map(g=>g.slice()) : (st.pick?[st.pick.slice()]:[[]]);
   preso.dim=st.dim; document.getElementById('m-dim').classList.toggle('active', preso.dim);
   preso.bubbles.forEach(b=>b.remove()); preso.bubbles.clear();
   const layer=document.querySelector('.bubbleLayer');
@@ -1892,7 +1896,7 @@ function el(tag, cls, txt){ const e=document.createElement(tag); if(cls) e.class
 let _presoSaved=null;
 function currentPresoSettings(){
   return {
-    chain:[...preso.chain], pick:[...preso.pick], rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL],
+    chainGroups:preso.chainGroups.map(g=>[...g]), pickGroups:preso.pickGroups.map(g=>[...g]), rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL],
     freeze:!!preso.freeze, frzRows:preso.frzRows||0, frzCols:preso.frzCols||0,
     sumOn:!!preso.sumOn, dim:!!preso.dim,
     sumCol: document.getElementById('sumCol').value,
@@ -1903,7 +1907,8 @@ function currentPresoSettings(){
 function applyPresoSettings(s){
   if(!s) return;
   preso.rowHL=new Set(s.rowHL||[]); preso.colHL=new Set(s.colHL||[]); preso.cellHL=new Set(s.cellHL||[]);
-  preso.chain=(s.chain||[]).slice(); preso.pick=(s.pick||[]).slice();
+  preso.chainGroups = s.chainGroups ? s.chainGroups.map(g=>g.slice()) : (s.chain?[s.chain.slice()]:[[]]);
+  preso.pickGroups = s.pickGroups ? s.pickGroups.map(g=>g.slice()) : (s.pick?[s.pick.slice()]:[[]]);
   preso.dim=!!s.dim; document.getElementById('m-dim').classList.toggle('active', preso.dim);
   if(s.pFont) document.getElementById('pFont').value=s.pFont;
   if(s.sumCol!=null){ const sel=document.getElementById('sumCol'); if([...sel.options].some(o=>o.value==s.sumCol)) sel.value=s.sumCol; }
@@ -1938,7 +1943,7 @@ function enterPreso(){
   const newTbl = buildPresoTable(grid);
   stage.insertBefore(newTbl, stage.firstChild);
 
-  preso.bubbles.clear(); preso.pickBubble=null; stage.classList.remove('dim');
+  preso.bubbles.clear(); preso.pickBubbles=[]; stage.classList.remove('dim');
   stage.querySelector('.bubbleLayer').innerHTML='';
   document.querySelector('.connLayer').innerHTML='';
 
@@ -2017,6 +2022,9 @@ document.getElementById('preso').addEventListener('wheel', e=>{
 }, {passive:false});
 
 function setPresoMode(m){
+  // 같은 모드를 다시 누르면 '새 그룹' 시작(또 다른 연결/합산)
+  if(m===preso.mode && m==='connect') newConnectGroup();
+  if(m===preso.mode && m==='picksum') newPickGroup();
   preso.mode = m;
   ['rowhl','colhl','cellhl','bubble','connect','picksum'].forEach(k=>
     document.getElementById('m-'+k).classList.toggle('active', k===m));
@@ -2082,40 +2090,42 @@ function presoClick(e){
   else if(preso.mode==='connect'){ if(r!=null && c!=null) toggleChain(r,c); }
   else if(preso.mode==='picksum'){ if(r!=null && c!=null) togglePick(r,c); }
 }
-/* ---------- 🧮 값 합계: 클릭한 칸에 번호 + 합계 말풍선 ---------- */
+/* ---------- 🧮 값 합계 (다중 그룹 · 말풍선은 셀 오른쪽) ---------- */
+function activePick(){ if(!preso.pickGroups.length) preso.pickGroups=[[]]; return preso.pickGroups[preso.pickGroups.length-1]; }
+function newPickGroup(){ const g=activePick(); if(g.length) preso.pickGroups.push([]); }
 function togglePick(r,c){
-  const key=r+','+c, i=preso.pick.indexOf(key);
-  if(i>=0) preso.pick.splice(i,1); else preso.pick.push(key);
+  const g=activePick(); const key=r+','+c, i=g.indexOf(key);
+  if(i>=0) g.splice(i,1); else g.push(key);
   renderPickSum(); schedulePresoHistory();
 }
 function renderPickSum(){
   const tbl=document.getElementById('presoTable'); if(!tbl) return;
   tbl.querySelectorAll('.picknum').forEach(e=>e.remove());
-  tbl.querySelectorAll('.picked').forEach(c=>c.classList.remove('picked'));
-  if(preso.pickBubble){ preso.pickBubble.remove(); preso.pickBubble=null; }
-  if(!preso.pick.length) return;
-  let total=0; const parts=[];
-  preso.pick.forEach((key,idx)=>{
-    const [r,c]=key.split(',').map(Number); const cell=getCell(r,c); if(!cell) return;
-    const v=parseKRW(valText(cell));   // 배지 추가 전, 깨끗한 텍스트로 값 계산
-    cell.classList.add('picked');
-    const b=document.createElement('span'); b.className='picknum'; b.textContent=idx+1; cell.appendChild(b);
-    if(v!=null){ total+=v; parts.push(krwShort(v)); }
+  tbl.querySelectorAll('.picked').forEach(c=>{ c.classList.remove('picked'); c.style.boxShadow=''; });
+  (preso.pickBubbles||[]).forEach(b=>b.remove()); preso.pickBubbles=[];
+  const layer=document.querySelector('.bubbleLayer'); const stage=document.getElementById('presoStage'); const sr=stage.getBoundingClientRect();
+  preso.pickGroups.forEach((g,gi)=>{
+    if(!g.length) return;
+    const color=PICK_PALETTE[gi % PICK_PALETTE.length];
+    let total=0; const parts=[]; let lastCell=null;
+    g.forEach((key,idx)=>{
+      const [r,c]=key.split(',').map(Number); const cell=getCell(r,c); if(!cell) return;
+      const v=parseKRW(valText(cell));   // 배지 전, 깨끗한 텍스트로 값 계산
+      cell.classList.add('picked'); cell.style.boxShadow='inset 0 0 0 3px '+color;
+      const b=document.createElement('span'); b.className='picknum'; b.textContent=idx+1; b.style.background=color; cell.appendChild(b);
+      if(v!=null){ total+=v; parts.push(krwShort(v)); }
+      lastCell=cell;
+    });
+    const bub=document.createElement('div'); bub.className='bubble picksum-bubble';
+    bub.style.background=color;
+    bub.innerHTML = (parts.length>1 ? parts.join(' + ')+' = ' : '') + '합계 '+krwShort(total);
+    layer.appendChild(bub);
+    if(lastCell){ const cr=lastCell.getBoundingClientRect();
+      bub.style.left=(cr.right-sr.left+10)+'px';   // 셀 오른쪽
+      bub.style.top =(cr.top-sr.top+cr.height/2)+'px';
+    }
+    preso.pickBubbles.push(bub);
   });
-  const bub=document.createElement('div'); bub.className='bubble picksum-bubble';
-  bub.innerHTML = (parts.length>1 ? parts.join(' + ')+' = ' : '') + '합계 '+krwShort(total);
-  document.querySelector('.bubbleLayer').appendChild(bub);
-  preso.pickBubble=bub;
-  positionPickBubble();
-}
-function positionPickBubble(){
-  if(!preso.pickBubble || !preso.pick.length) return;
-  const [r,c]=preso.pick[preso.pick.length-1].split(',').map(Number);
-  const cell=getCell(r,c); if(!cell) return;
-  const stage=document.getElementById('presoStage');
-  const cr=cell.getBoundingClientRect(), sr=stage.getBoundingClientRect();
-  preso.pickBubble.style.left=(cr.left-sr.left+cr.width/2)+'px';
-  preso.pickBubble.style.top =(cr.top-sr.top)+'px';
 }
 /* ---------- 발표 중 우클릭 빠른 메뉴 ---------- */
 function presoContextMenu(e){
@@ -2132,6 +2142,9 @@ function presoContextMenu(e){
     items.push({label:'🔗 연결에 넣기/빼기', fn:()=>toggleChain(r,c)});
     items.push({label:'💬 이 열 합계 말풍선', fn:()=>toggleBubble(r,c)});
   }
+  items.push('sep');
+  items.push({label:'🧮➕ 새 합계 그룹 시작', fn:()=>{ newPickGroup(); setPresoMode('picksum'); }});
+  items.push({label:'🔗➕ 새 연결 그룹 시작', fn:()=>{ newConnectGroup(); setPresoMode('connect'); }});
   items.push('sep');
   items.push({label:'🔦 집중 켜기/끄기', fn:()=>toggleDim()});
   items.push({label:'🧊 고정 켜기/끄기', fn:()=>toggleFreeze()});
@@ -2304,11 +2317,12 @@ function positionBubble(key){
   b.style.top  = (cr.top  - sr.top) + 'px';
 }
 
-/* ---------- 담보 연결선 ---------- */
+/* ---------- 담보 연결선 (다중 그룹 · 번호는 셀 왼쪽 밖) ---------- */
+function activeChain(){ if(!preso.chainGroups.length) preso.chainGroups=[[]]; return preso.chainGroups[preso.chainGroups.length-1]; }
+function newConnectGroup(){ const g=activeChain(); if(g.length) preso.chainGroups.push([]); }
 function toggleChain(r,c){
-  const key = r+','+c;
-  const i = preso.chain.indexOf(key);
-  if(i>=0) preso.chain.splice(i,1); else preso.chain.push(key);
+  const g=activeChain(); const key=r+','+c, i=g.indexOf(key);
+  if(i>=0) g.splice(i,1); else g.push(key);
   drawConnections(); schedulePresoHistory();
 }
 function drawConnections(){
@@ -2318,36 +2332,38 @@ function drawConnections(){
   svg.setAttribute('height', stage.offsetHeight);
   svg.innerHTML = '';
   const sr = stage.getBoundingClientRect();
-  // 칸 단위 연결: 클릭한 칸(세부항목 포함)의 중심을 점으로 — 3·4개 이상도 순서대로 연결
-  document.querySelectorAll('#presoTable td.chained, #presoTable th.chained').forEach(c=>c.classList.remove('chained'));
-  const pts = preso.chain.map(key=>{
-    const [r,c]=key.split(',').map(Number);
-    const cell = getCell(r,c); if(!cell) return null;
-    cell.classList.add('chained');
-    const cr = cell.getBoundingClientRect();
-    return { x: cr.left - sr.left + cr.width/2, y: cr.top - sr.top + cr.height/2 };
-  }).filter(Boolean);
-  for(let i=0;i<pts.length-1;i++){
-    const a=pts[i], b=pts[i+1];
-    const mx=(a.x+b.x)/2;   // 칸과 칸 사이를 부드러운 S곡선으로 연결
-    const path = document.createElementNS(SVGNS,'path');
-    path.setAttribute('d', `M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}`);
-    svg.appendChild(path);
-  }
-  pts.forEach((pt,idx)=>{
-    const ci = document.createElementNS(SVGNS,'circle');
-    ci.setAttribute('cx',pt.x); ci.setAttribute('cy',pt.y); ci.setAttribute('r',14); ci.setAttribute('class','node');
-    svg.appendChild(ci);
-    const tx = document.createElementNS(SVGNS,'text');
-    tx.setAttribute('x',pt.x); tx.setAttribute('y',pt.y); tx.setAttribute('class','nodeTxt');
-    tx.textContent = idx+1; svg.appendChild(tx);
+  document.querySelectorAll('#presoTable td.chained, #presoTable th.chained').forEach(c=>{ c.classList.remove('chained'); c.style.boxShadow=''; });
+  const baseConn = (document.getElementById('connColor')||{}).value || '#ff5a5f';
+  preso.chainGroups.forEach((g,gi)=>{
+    const color = gi===0 ? baseConn : CONN_PALETTE[gi % CONN_PALETTE.length];
+    const pts = g.map(key=>{
+      const [r,c]=key.split(',').map(Number);
+      const cell = getCell(r,c); if(!cell) return null;
+      cell.classList.add('chained'); cell.style.boxShadow='inset 0 0 0 3px '+color;
+      const cr = cell.getBoundingClientRect();
+      return { x: cr.left - sr.left - 12, y: cr.top - sr.top + cr.height/2 };   // 셀 왼쪽 바깥
+    }).filter(Boolean);
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i], b=pts[i+1]; const my=(a.y+b.y)/2;
+      const path = document.createElementNS(SVGNS,'path');
+      path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x-26} ${my}, ${b.x-26} ${my}, ${b.x} ${b.y}`);
+      path.style.stroke=color; svg.appendChild(path);
+    }
+    pts.forEach((pt,idx)=>{
+      const ci = document.createElementNS(SVGNS,'circle');
+      ci.setAttribute('cx',pt.x); ci.setAttribute('cy',pt.y); ci.setAttribute('r',13); ci.setAttribute('class','node'); ci.style.fill=color;
+      svg.appendChild(ci);
+      const tx = document.createElementNS(SVGNS,'text');
+      tx.setAttribute('x',pt.x); tx.setAttribute('y',pt.y); tx.setAttribute('class','nodeTxt');
+      tx.textContent = idx+1; svg.appendChild(tx);
+    });
   });
 }
 
 function repositionAll(){
   preso.bubbles.forEach((b,k)=> positionBubble(k));
   drawConnections();
-  positionPickBubble();
+  renderPickSum();
 }
 
 /* ---------- 색상/크기 커스텀 ---------- */
@@ -2369,7 +2385,7 @@ function applyPresoColors(){
 
 /* ---------- 효과 지우기 ---------- */
 function clearEffects(){
-  preso.rowHL.clear(); preso.colHL.clear(); preso.cellHL.clear(); preso.chain=[]; preso.pick=[];
+  preso.rowHL.clear(); preso.colHL.clear(); preso.cellHL.clear(); preso.chainGroups=[[]]; preso.pickGroups=[[]];
   preso.bubbles.forEach(b=> b.remove()); preso.bubbles.clear();
   applyHL(); applyCellHL(); applyDim(); drawConnections(); renderPickSum(); schedulePresoHistory();
 }
