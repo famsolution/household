@@ -190,10 +190,9 @@
   #presoTable .chandle:hover, #presoTable .rhandle:hover{background:#dce8ff; color:var(--blue);}
   #presoTable .chandle.sel, #presoTable .rhandle.sel{background:var(--blue); color:#fff;}
 
-  /* 행/열 고정(sticky) */
+  /* 행/열 고정(sticky) — 배경은 JS가 '투명한 칸만' 흰색으로 채워 원래 색 보존 */
   #presoStage.frz #presoTable .frz-t{position:sticky; z-index:30;}
-  #presoStage.frz #presoTable .frz-l{position:sticky; z-index:25; background-color:#fff;}
-  #presoStage.frz #presoTable tr.phead td.frz-t{background-color:#fff;}
+  #presoStage.frz #presoTable .frz-l{position:sticky; z-index:25;}
   #presoStage.frz #presoTable .frz-t.frz-l{z-index:38;}
   #presoStage.frz #presoTable .head-row th.frz-t, #presoStage.frz #presoTable .handle-row th.frz-t{z-index:34;}
 
@@ -1907,7 +1906,7 @@ function applyPresoSettings(s){
   document.getElementById('m-freeze').classList.toggle('active', preso.freeze);
   applyPresoColors(); applyHL(); applyCellHL(); applyDim(); drawConnections();
   if(preso.sumOn) refreshSum(); else { document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
-  if(preso.freeze) freezePreso();
+  if(preso.freeze){ freezePreso(); requestAnimationFrame(()=>{ if(preso.freeze) freezePreso(); }); }   // 레이아웃 안정 후 위치 재계산
 }
 function enterPreso(){
   const tbl = document.getElementById('tbl');
@@ -1966,28 +1965,32 @@ function onFreezeInput(){
 }
 function freezePreso(){
   const stage=document.getElementById('presoStage'), tbl=document.getElementById('presoTable'); if(!tbl) return;
+  // 초기화: 고정 클래스/위치 + 내가 채운 배경만 원복(원래 색은 건드리지 않음)
   tbl.querySelectorAll('.frz-t,.frz-l').forEach(c=>{ c.classList.remove('frz-t','frz-l'); c.style.top=''; c.style.left=''; });
+  tbl.querySelectorAll('[data-frzfill]').forEach(c=>{ c.style.backgroundColor=''; c.removeAttribute('data-frzfill'); });
   stage.classList.toggle('frz', preso.freeze);
   document.getElementById('preso').style.textAlign = preso.freeze ? 'left' : '';
   if(!preso.freeze) return;
+  // 투명한 칸만 흰색으로 채워 스크롤 시 비치지 않게(원래 배경색은 유지)
+  const fill=cell=>{ const bg=getComputedStyle(cell).backgroundColor; if(!bg || bg==='rgba(0, 0, 0, 0)' || bg==='transparent'){ cell.style.backgroundColor='#fff'; cell.dataset.frzfill='1'; } };
   const allTrs=[...tbl.tHead.rows, ...tbl.tBodies[0].rows];   // ⋯핸들, 제목, 본문…
   const top = Math.max(0, parseInt(preso.frzRows)||0);
   const left = Math.max(0, parseInt(preso.frzCols)||0);
-  // 위 고정: 사용자가 지정한 행 수(제목행부터) + 맨 위 ⋯ 핸들행은 자동 포함
+  // 위 고정: 지정한 행 수(제목행부터) + 맨 위 ⋯ 핸들행 자동 포함
   if(top>0){
     let acc=44;
-    allTrs.slice(0, top+1).forEach(tr=>{ const h=tr.getBoundingClientRect().height||0; [...tr.cells].forEach(c=>{ c.classList.add('frz-t'); c.style.top=acc+'px'; }); acc+=h; });
+    allTrs.slice(0, top+1).forEach(tr=>{ [...tr.cells].forEach(c=>{ c.classList.add('frz-t'); c.style.top=acc+'px'; fill(c); }); acc+=tr.offsetHeight; });
   }
   // 왼쪽 고정: ⋮ 핸들열 + 지정한 데이터 열 수(왼쪽부터)
   if(left>0){
     const rhCell=tbl.querySelector('tbody .rhandle')||tbl.querySelector('.rhandle-corner');
-    const rhW=rhCell?rhCell.getBoundingClientRect().width:0;
-    const colW={}; tbl.querySelectorAll('[data-col]').forEach(cell=>{ if((cell.colSpan||1)===1){ const c=+cell.dataset.col, w=cell.getBoundingClientRect().width; if(colW[c]===undefined && w) colW[c]=w; } });
+    const rhW=rhCell?rhCell.offsetWidth:0;
+    const colW={}; tbl.querySelectorAll('[data-col]').forEach(cell=>{ if((cell.colSpan||1)===1){ const c=+cell.dataset.col; if(colW[c]===undefined && cell.offsetWidth) colW[c]=cell.offsetWidth; } });
     const leftOf=c=>{ let x=rhW; for(let i=0;i<c;i++) x+=(colW[i]||0); return x; };
     allTrs.forEach(tr=>{ [...tr.cells].forEach(cell=>{
-      if(cell.classList.contains('rhandle')||cell.classList.contains('corner')||cell.classList.contains('rhandle-corner')){ cell.classList.add('frz-l'); cell.style.left='0px'; return; }
+      if(cell.classList.contains('rhandle')||cell.classList.contains('corner')||cell.classList.contains('rhandle-corner')){ cell.classList.add('frz-l'); cell.style.left='0px'; fill(cell); return; }
       const dc = cell.dataset.col!==undefined ? +cell.dataset.col : null;
-      if(dc!==null && dc<left){ cell.classList.add('frz-l'); cell.style.left=leftOf(dc)+'px'; }
+      if(dc!==null && dc<left){ cell.classList.add('frz-l'); cell.style.left=leftOf(dc)+'px'; fill(cell); }
     }); });
   }
 }
