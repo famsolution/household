@@ -2040,6 +2040,7 @@ window.addEventListener('pointerup', ()=>{ preso.painting=null; });
 window.addEventListener('resize', ()=>{ if(document.getElementById('preso').classList.contains('on')){ adjustPresoLayout(); if(preso.freeze) freezePreso(); repositionAll(); } });
 
 function presoDown(e){
+  if(e.button!==0) return;   // 좌클릭만 강조/그리기 (우클릭은 메뉴)
   const cell = e.target.closest('td,th'); if(!cell) return;
   // ⋮(행 핸들)·⋯(열 핸들)은 모드와 무관하게 그 줄 전체를 강조
   if(cell.classList.contains('rhandle')){
