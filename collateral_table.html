@@ -156,9 +156,11 @@
   #presoTable td.cellhl{ background-color:var(--cellHlColor,#fde047) !important; }
   /* 발표 도구모음 — 하단바, 기능 그룹별로 1행(넘치면 2행) */
   #presoBar{position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:1100;
-    display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px 14px; max-width:97vw;
+    display:flex; flex-wrap:nowrap; justify-content:flex-start; align-items:center; gap:6px 14px;
+    max-width:97vw; overflow-x:auto; overflow-y:hidden;
     background:rgba(255,255,255,.97); backdrop-filter:blur(6px);
     padding:8px 12px; border-radius:14px; box-shadow:0 -6px 34px rgba(0,0,0,.4);}
+  #presoBar .bar-grp{flex:0 0 auto;}
   #presoBar .bar-grp{display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px;}
   #presoBar button{padding:9px 12px; font-size:13px; border-radius:10px; background:#eef2f7; color:#2b3440; font-weight:600;}
   #presoBar button.active{background:var(--blue); color:#fff; box-shadow:0 4px 10px rgba(49,130,246,.35);}
@@ -249,15 +251,41 @@
   #presoTable td.sumglow::before{content:''; position:absolute; inset:0; pointer-events:none; z-index:3;
     box-shadow:inset 0 0 0 3px var(--sumColor,#ff5a5f); animation:sumpulse 1.3s ease-in-out infinite;}
   @keyframes sumpulse{0%,100%{opacity:.45} 50%{opacity:1}}
+
+  /* 단계 버튼바 + 모달 */
+  .stepbar{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;}
+  .stepbar button{font-size:14px; font-weight:700; padding:13px 18px; border-radius:14px; background:#fff; color:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,.06); border:1px solid var(--line);}
+  .stepbar button:hover{background:#f4f7ff; border-color:var(--blue); color:var(--blue);}
+  .stepbar button.btn-primary{background:var(--blue); color:#fff; border-color:var(--blue);}
+  .stepbar button.btn-primary:hover{filter:brightness(1.05); color:#fff;}
+  .stepbar button:disabled{opacity:.4; cursor:not-allowed;}
+  #modalBackdrop{position:fixed; inset:0; background:rgba(15,23,42,.5); z-index:590; display:none;}
+  #modalBackdrop.on{display:block;}
+  .modal-card{display:none;}
+  .modal-card.on{display:block; position:fixed; z-index:600; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(980px,94vw); max-height:88vh; overflow:auto; margin:0; box-shadow:0 30px 90px rgba(0,0,0,.45);}
+  .modal-x{float:right; cursor:pointer; background:#f1f4f7; border:none; border-radius:10px; padding:6px 12px; font-weight:800; font-size:13px; color:#4e5968;}
+  .modal-x:hover{background:#ffe9e9; color:#e54848;}
 </style>
 </head>
 <body>
 
 <h1>보험 담보표 + 발표 모드 🛡️</h1>
-<p class="desc">엑셀 불러오기 · 직접 입력 · 시트 저장 · 원하는 담보만 펼치기, 그리고 발표 모드에서 형광펜·연결·<b>합산 보험금</b>까지 한 곳에서 끝냅니다.</p>
+<p class="desc">단계별 버튼을 눌러 설정하고, 아래 미리보기에서 바로 확인하세요. 발표 모드에서 형광펜·연결·<b>합산 보험금</b>까지 한 곳에서 끝냅니다.</p>
 
-<!-- 1. 입력 -->
-<div class="card">
+<!-- 단계 버튼바 -->
+<div class="stepbar">
+  <button class="btn-primary" onclick="openModal('inputCard')">📥 표 만들기 / 불러오기</button>
+  <button id="step-vis"    onclick="openModal('visCard')"   disabled>👁 담보·열 고르기</button>
+  <button id="step-group"  onclick="openModal('groupCard')" disabled>🧩 특약 골라보기</button>
+  <button id="step-design" onclick="openModal('optCard')"   disabled>🎨 디자인</button>
+  <button id="step-sheet"  onclick="openModal('sheetCard')" disabled>💾 시트 저장·불러오기</button>
+</div>
+<div id="modalBackdrop" onclick="closeModal()"></div>
+
+<!-- 1. 입력 (모달) -->
+<div class="card modal-card" id="inputCard">
+  <button class="modal-x" onclick="closeModal()">✕ 닫기</button>
   <h2>① 표 만들기 — 엑셀 파일 · 직접 입력 · 붙여넣기</h2>
   <div class="toolbar" style="margin-bottom:12px;">
     <button class="btn-primary" onclick="document.getElementById('excelFile').click()">📊 엑셀/CSV 파일 불러오기</button>
@@ -279,9 +307,10 @@
 </div>
 
 <!-- 1.5 시트 저장/불러오기 -->
-<div class="card" id="sheetCard" style="display:none;">
-  <h2 style="cursor:pointer; user-select:none;" onclick="toggleCard('sheetBody',this)"><span class="caret">▶</span> 💾 시트 저장 · 불러오기 (여러 담보 세트 보관)</h2>
-  <div id="sheetBody" style="display:none;">
+<div class="card modal-card" id="sheetCard">
+  <button class="modal-x" onclick="closeModal()">✕ 닫기</button>
+  <h2>💾 시트 저장 · 불러오기 (여러 담보 세트 보관)</h2>
+  <div id="sheetBody">
   <div class="opts">
     <div class="opt">시트 이름<input type="text" id="sheetName" placeholder="예) 암통합치료비" style="width:180px; padding:8px 10px; border:1px solid var(--line); border-radius:10px;"></div>
     <button class="btn-primary" onclick="saveSheet()">💾 이 시트 저장</button>
@@ -299,9 +328,10 @@
 </div>
 
 <!-- 2. 담보/열 표시 -->
-<div class="card" id="visCard" style="display:none;">
-  <h2 style="cursor:pointer; user-select:none;" onclick="toggleCard('visBody',this)"><span class="caret">▶</span> ② 표시할 담보 · 열 고르기 (발표·이미지에 나올 항목)</h2>
-  <div id="visBody" style="display:none;">
+<div class="card modal-card" id="visCard">
+  <button class="modal-x" onclick="closeModal()">✕ 닫기</button>
+  <h2>👁 표시할 담보 · 열 고르기 (발표·이미지에 나올 항목)</h2>
+  <div id="visBody">
   <div class="toolbar" style="margin-bottom:10px;">
     <input type="text" id="rowSearch" placeholder="🔍 담보 검색..." oninput="filterChips()"
            style="flex:1; min-width:160px; padding:8px 12px; border:1px solid var(--line); border-radius:10px; font-family:inherit;">
@@ -321,9 +351,10 @@
 </div>
 
 <!-- 3. 디자인 옵션 -->
-<div class="card" id="optCard" style="display:none;">
-  <h2 style="cursor:pointer; user-select:none;" onclick="toggleCard('optBody',this)"><span class="caret">▶</span> ③ 디자인 커스텀 (글자·여백·색·선)</h2>
-  <div id="optBody" style="display:none;">
+<div class="card modal-card" id="optCard">
+  <button class="modal-x" onclick="closeModal()">✕ 닫기</button>
+  <h2>🎨 디자인 커스텀 (글자·여백·색·선)</h2>
+  <div id="optBody">
   <div class="opts">
     <div class="opt">글자 크기 <span id="vFont">14px</span>
       <input type="range" id="font" min="10" max="26" value="14" oninput="applyStyle()"></div>
@@ -360,9 +391,10 @@
 </div>
 
 <!-- 3.5 특약(대분류·중분류) 골라 보기 -->
-<div class="card" id="groupCard" style="display:none;">
-  <h2 style="cursor:pointer; user-select:none;" onclick="toggleCard('groupBody',this)"><span class="caret">▶</span> 🧩 특약 골라 보기 — 대분류·중분류 선택, 빈 가로행 자동 숨김</h2>
-  <div id="groupBody" style="display:none;">
+<div class="card modal-card" id="groupCard">
+  <button class="modal-x" onclick="closeModal()">✕ 닫기</button>
+  <h2>🧩 특약 골라 보기 — 대분류·중분류 선택, 빈 가로행 자동 숨김</h2>
+  <div id="groupBody">
   <div class="opts" style="margin-bottom:10px;">
     <div class="opt">대분류가 적힌 행
       <select id="daeRow" onchange="refreshDaeOptions()"></select></div>
@@ -666,11 +698,9 @@ function buildTableModel(m){
   const wrap = document.getElementById('tableWrap');
   wrap.innerHTML = ''; wrap.appendChild(tbl);
 
-  document.getElementById('sheetCard').style.display = 'block';
-  document.getElementById('visCard').style.display = 'block';
-  document.getElementById('optCard').style.display = 'block';
-  document.getElementById('groupCard').style.display = 'block';
   document.getElementById('resultCard').style.display = 'block';
+  ['step-vis','step-group','step-design','step-sheet'].forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=false; });
+  closeModal();   // 표가 만들어지면 입력 모달을 닫고 미리보기를 보여줌
   decorateGrips(); applySelModeState(); clearSel();
   refreshControls(); applyStyle();
   populateGroupRowSelects();          // 대분류·중분류 머리행 먼저 결정
@@ -1275,7 +1305,18 @@ function setStyleState(s){
   applyStyle();
 }
 
-/* 카드 접기/펼치기 */
+/* 단계 모달 열기/닫기 */
+function openModal(id){
+  document.querySelectorAll('.modal-card.on').forEach(m=>m.classList.remove('on'));
+  const m=document.getElementById(id); if(!m) return;
+  m.classList.add('on'); m.scrollTop=0;
+  document.getElementById('modalBackdrop').classList.add('on');
+}
+function closeModal(){
+  document.querySelectorAll('.modal-card.on').forEach(m=>m.classList.remove('on'));
+  const bd=document.getElementById('modalBackdrop'); if(bd) bd.classList.remove('on');
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 function toggleCard(id, h){
   const b=document.getElementById(id); if(!b) return;
   const open = b.style.display==='none';
@@ -1900,7 +1941,7 @@ function freezePreso(){
 }
 /* Ctrl+Alt+휠 = 발표 자료 확대/축소(크기 슬라이더 연동) */
 document.getElementById('preso').addEventListener('wheel', e=>{
-  if(e.ctrlKey && e.altKey){
+  if(e.ctrlKey){            // Ctrl(또는 Ctrl+Alt)+휠 = 발표 표만 확대/축소(브라우저 페이지 줌 차단 → 도구바는 고정)
     e.preventDefault();
     const inp=document.getElementById('pFont');
     let v=Math.round(+inp.value + (e.deltaY<0 ? 2 : -2));
