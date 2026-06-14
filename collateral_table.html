@@ -505,6 +505,8 @@
       <span class="ci">금액열<select id="sumCol" onchange="refreshSum()"></select></span>
       <button id="m-dim" onclick="toggleDim()">🔦 집중</button>
       <button id="m-freeze" onclick="toggleFreeze()">🧊 고정</button>
+      <span class="ci">행<input type="number" id="frzRows" min="0" max="15" value="0" style="width:42px; padding:4px 6px; border:1px solid var(--line); border-radius:7px;" oninput="onFreezeInput()"></span>
+      <span class="ci">열<input type="number" id="frzCols" min="0" max="15" value="0" style="width:42px; padding:4px 6px; border:1px solid var(--line); border-radius:7px;" oninput="onFreezeInput()"></span>
       <button onclick="clearEffects()">🧹 지우기</button>
       <button onclick="savePresoImage()">💾 저장</button>
     </div>
@@ -520,7 +522,7 @@
       <span class="ci">배경<input type="color" id="stageBg"       value="#0f172a" oninput="applyPresoColors()"></span>
     </div>
   </div>
-  <div id="presoHint">⋮·⋯ 핸들 = 행/열 형광 · 🔗 연결: 칸을 순서대로 클릭(세부항목도) · Ctrl+휠 = 확대/축소 · 🧊 고정 · 세팅은 저장돼 발표 자료로 재사용</div>
+  <div id="presoHint">⋮·⋯ 핸들 = 행/열 형광 · 🔗 연결: 칸 순서대로 클릭 · Ctrl+휠 = 확대/축소 · 🧊 고정 옆 행·열 숫자로 고정 범위 직접 지정 · 세팅 저장돼 재사용</div>
   <div id="presoStage">
     <svg class="connLayer"></svg>
     <div class="bubbleLayer"></div>
@@ -1716,7 +1718,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') hideCtx(); });
    🎬 발표(프레젠테이션) 모드
    ========================================================== */
 const SVGNS = 'http://www.w3.org/2000/svg';
-const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false, freeze:false };
+const preso = { mode:'rowhl', rowHL:new Set(), colHL:new Set(), cellHL:new Set(), chain:[], bubbles:new Map(), painting:null, dim:false, sumOn:false, freeze:false, frzRows:0, frzCols:0 };
 
 /* ---------- 발표 모드 실행취소/다시실행 ---------- */
 let presoHist=[], presoIdx=-1, _presoRestoring=false, _presoHistT=null;
@@ -1880,7 +1882,8 @@ let _presoSaved=null;
 function currentPresoSettings(){
   return {
     chain:[...preso.chain], rowHL:[...preso.rowHL], colHL:[...preso.colHL], cellHL:[...preso.cellHL],
-    freeze:!!preso.freeze, sumOn:!!preso.sumOn, dim:!!preso.dim,
+    freeze:!!preso.freeze, frzRows:preso.frzRows||0, frzCols:preso.frzCols||0,
+    sumOn:!!preso.sumOn, dim:!!preso.dim,
     sumCol: document.getElementById('sumCol').value,
     pFont: document.getElementById('pFont').value,
     bubbles: [...preso.bubbles.entries()].map(([k,el])=>[k, el.innerHTML])
@@ -1896,7 +1899,12 @@ function applyPresoSettings(s){
   const layer=document.querySelector('.bubbleLayer');
   (s.bubbles||[]).forEach(([k,html])=>{ const b=document.createElement('div'); b.className='bubble'; b.contentEditable=true; b.innerHTML=html; b.addEventListener('input',schedulePresoHistory); layer.appendChild(b); preso.bubbles.set(k,b); positionBubble(k); });
   preso.sumOn=!!s.sumOn; document.getElementById('m-sum').classList.toggle('active', preso.sumOn);
-  preso.freeze=!!s.freeze; document.getElementById('m-freeze').classList.toggle('active', preso.freeze);
+  preso.freeze=!!s.freeze;
+  preso.frzRows = (s.frzRows!=null) ? s.frzRows : (preso._defFrzRows||0);
+  preso.frzCols = (s.frzCols!=null) ? s.frzCols : (preso._defFrzCols||0);
+  document.getElementById('frzRows').value = preso.frzRows||0;
+  document.getElementById('frzCols').value = preso.frzCols||0;
+  document.getElementById('m-freeze').classList.toggle('active', preso.freeze);
   applyPresoColors(); applyHL(); applyCellHL(); applyDim(); drawConnections();
   if(preso.sumOn) refreshSum(); else { document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
   if(preso.freeze) freezePreso();
@@ -1906,6 +1914,9 @@ function enterPreso(){
   if(!tbl){ alert('먼저 표를 만들어 주세요.'); return; }
   const grid = getVisibleGrid();
   if(grid.rows.length===0){ alert('표시할 담보가 없습니다.'); return; }
+  // 고정 추정 기본값: 머리행(제목+대분류+중분류) 행 수, 왼쪽 라벨 열 수
+  preso._defFrzRows = (grid.hdrRows && grid.hdrRows.size) ? Math.max(...grid.hdrRows)+2 : 1;
+  preso._defFrzCols = grid.labelCols || 1;
 
   // 적용할 세팅: 불러온 파일의 발표 세팅(_presoSaved)이 있으면 그것, 없으면 직전 세션값을 유지
   const settings = _presoSaved || currentPresoSettings();
@@ -1938,6 +1949,18 @@ function exitPreso(){ document.getElementById('preso').classList.remove('on'); d
 /* ---------- 행/열 고정(머리글·담보) ---------- */
 function toggleFreeze(){
   preso.freeze=!preso.freeze;
+  if(preso.freeze && (parseInt(preso.frzRows)||0)===0 && (parseInt(preso.frzCols)||0)===0){
+    preso.frzRows = preso._defFrzRows||1; preso.frzCols = preso._defFrzCols||1;   // 처음 켜면 추정값
+  }
+  document.getElementById('frzRows').value = preso.frzRows||0;
+  document.getElementById('frzCols').value = preso.frzCols||0;
+  document.getElementById('m-freeze').classList.toggle('active', preso.freeze);
+  freezePreso();
+}
+function onFreezeInput(){
+  preso.frzRows = parseInt(document.getElementById('frzRows').value)||0;
+  preso.frzCols = parseInt(document.getElementById('frzCols').value)||0;
+  preso.freeze = (preso.frzRows>0 || preso.frzCols>0);
   document.getElementById('m-freeze').classList.toggle('active', preso.freeze);
   freezePreso();
 }
@@ -1947,21 +1970,26 @@ function freezePreso(){
   stage.classList.toggle('frz', preso.freeze);
   document.getElementById('preso').style.textAlign = preso.freeze ? 'left' : '';
   if(!preso.freeze) return;
-  // 위: 머리글(thead) + 머리행(phead)까지 — 위에서부터 누적 top
-  const bodyTrs=[...tbl.tBodies[0].rows];
-  let maxHdr=-1; bodyTrs.forEach((tr,i)=>{ if(tr.classList.contains('phead')) maxHdr=Math.max(maxHdr,i); });
-  const topTrs=[...tbl.tHead.rows, ...bodyTrs.slice(0, maxHdr+1)];
-  let topAcc=48;
-  topTrs.forEach(tr=>{ const h=tr.getBoundingClientRect().height||0; [...tr.cells].forEach(c=>{ c.classList.add('frz-t'); c.style.top=topAcc+'px'; }); topAcc+=h; });
-  // 왼쪽: ⋮ 핸들열 + 라벨열(plabel) — 왼쪽부터 누적 left
-  const rhCell=tbl.querySelector('tbody .rhandle')||tbl.querySelector('.rhandle-corner');
-  const rhW=rhCell?rhCell.getBoundingClientRect().width:0;
-  const colW={};
-  tbl.querySelectorAll('[data-col]').forEach(cell=>{ if((cell.colSpan||1)===1){ const c=+cell.dataset.col, w=cell.getBoundingClientRect().width; if(colW[c]===undefined && w) colW[c]=w; } });
-  let maxLab=-1; tbl.querySelectorAll('.plabel').forEach(c=>{ maxLab=Math.max(maxLab, +c.dataset.col); });
-  const leftOf={}; let acc=rhW; for(let c=0;c<=maxLab;c++){ leftOf[c]=acc; acc+=(colW[c]||0); }
-  tbl.querySelectorAll('.rhandle, .corner, .rhandle-corner').forEach(c=>{ c.classList.add('frz-l'); c.style.left='0px'; });
-  tbl.querySelectorAll('.plabel').forEach(c=>{ c.classList.add('frz-l'); c.style.left=(leftOf[+c.dataset.col]||0)+'px'; });
+  const allTrs=[...tbl.tHead.rows, ...tbl.tBodies[0].rows];   // ⋯핸들, 제목, 본문…
+  const top = Math.max(0, parseInt(preso.frzRows)||0);
+  const left = Math.max(0, parseInt(preso.frzCols)||0);
+  // 위 고정: 사용자가 지정한 행 수(제목행부터) + 맨 위 ⋯ 핸들행은 자동 포함
+  if(top>0){
+    let acc=44;
+    allTrs.slice(0, top+1).forEach(tr=>{ const h=tr.getBoundingClientRect().height||0; [...tr.cells].forEach(c=>{ c.classList.add('frz-t'); c.style.top=acc+'px'; }); acc+=h; });
+  }
+  // 왼쪽 고정: ⋮ 핸들열 + 지정한 데이터 열 수(왼쪽부터)
+  if(left>0){
+    const rhCell=tbl.querySelector('tbody .rhandle')||tbl.querySelector('.rhandle-corner');
+    const rhW=rhCell?rhCell.getBoundingClientRect().width:0;
+    const colW={}; tbl.querySelectorAll('[data-col]').forEach(cell=>{ if((cell.colSpan||1)===1){ const c=+cell.dataset.col, w=cell.getBoundingClientRect().width; if(colW[c]===undefined && w) colW[c]=w; } });
+    const leftOf=c=>{ let x=rhW; for(let i=0;i<c;i++) x+=(colW[i]||0); return x; };
+    allTrs.forEach(tr=>{ [...tr.cells].forEach(cell=>{
+      if(cell.classList.contains('rhandle')||cell.classList.contains('corner')||cell.classList.contains('rhandle-corner')){ cell.classList.add('frz-l'); cell.style.left='0px'; return; }
+      const dc = cell.dataset.col!==undefined ? +cell.dataset.col : null;
+      if(dc!==null && dc<left){ cell.classList.add('frz-l'); cell.style.left=leftOf(dc)+'px'; }
+    }); });
+  }
 }
 /* Ctrl+Alt+휠 = 발표 자료 확대/축소(크기 슬라이더 연동) */
 document.getElementById('preso').addEventListener('wheel', e=>{
