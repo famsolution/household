@@ -78,6 +78,11 @@
 <div id="app">
   <div id="top">
     <span class="title" id="docTitle">보험 담보표 — 모바일 보기</span>
+    <span id="slideNavM" style="display:none; align-items:center; gap:4px;">
+      <button id="sm-prev" onclick="prevSlideM()">◀</button>
+      <span id="sm-ind" style="font-weight:800; color:#93c5fd; min-width:46px; text-align:center;">1 / 1</span>
+      <button id="sm-next" onclick="nextSlideM()">▶</button>
+    </span>
     <label class="filebtn">📂 파일<input type="file" id="file" accept=".json,application/json"></label>
     <button onclick="loadSample()">예시</button>
   </div>
@@ -163,7 +168,41 @@ function loadModel(d){
   document.getElementById('empty').style.display='none';
   applyStyleVars(d.style||{});
   render();
+  // 다중 슬라이드: 있으면 첫 장부터 보여주고 네비게이션 표시
+  curSlideM = (M.slides && M.slides.length) ? 0 : -1;
+  updateSlideNavM();
+  if(curSlideM>=0) applySlideM(0);
   try{ localStorage.setItem('mobile_last', JSON.stringify(d)); }catch(e){}
+}
+
+/* ===== 다중 슬라이드(여러 장 보기) ===== */
+let curSlideM=-1;
+function applySlideM(i){
+  if(!M || !M.slides || i<0 || i>=M.slides.length) return;
+  curSlideM=i;
+  const s=M.slides[i];
+  M.colHidden=(s.colHidden||[]).slice();
+  (M.rows||[]).forEach((r,ri)=>{ r.hidden = !!(s.rowsHidden && s.rowsHidden[ri]); });
+  const p=s.preso||{};
+  view.rowHL=new Set(p.rowHL||[]); view.colHL=new Set(p.colHL||[]); view.cellHL=new Set(p.cellHL||[]);
+  view.chainGroups = p.chainGroups ? p.chainGroups.map(g=>g.slice()) : [[]];
+  view.pickGroups  = p.pickGroups  ? p.pickGroups.map(g=>g.slice())  : [[]];
+  view.freeze=!!p.freeze; view.frzRows=p.frzRows||0; view.frzCols=p.frzCols||0;
+  if(p.pFont) mfont=Math.max(12,Math.min(40, Math.round(p.pFont*0.8)));
+  document.getElementById('m-frz').classList.toggle('on', view.freeze);
+  render(); updateSlideNavM();
+}
+function prevSlideM(){ if(curSlideM>0) applySlideM(curSlideM-1); }
+function nextSlideM(){ if(M.slides && curSlideM<M.slides.length-1) applySlideM(curSlideM+1); }
+function updateSlideNavM(){
+  const nav=document.getElementById('slideNavM'); if(!nav) return;
+  const has=M && M.slides && M.slides.length>0;
+  nav.style.display = has ? 'inline-flex' : 'none';
+  if(has){
+    document.getElementById('sm-ind').textContent=(curSlideM+1)+' / '+M.slides.length;
+    document.getElementById('sm-prev').disabled = curSlideM<=0;
+    document.getElementById('sm-next').disabled = curSlideM>=M.slides.length-1;
+  }
 }
 function restoreCanonical(){
   if(!M.mergeSpec) return;
@@ -353,6 +392,7 @@ function save(){ if(!M) return; try{ M.preso=Object.assign({}, M.preso, {
   rowHL:[...view.rowHL], colHL:[...view.colHL], cellHL:[...view.cellHL],
   chainGroups:view.chainGroups.map(g=>[...g]), pickGroups:view.pickGroups.map(g=>[...g]),
   freeze:view.freeze, frzRows:view.frzRows, frzCols:view.frzCols, pFont:Math.round(mfont/0.8) });
+  if(M.slides && curSlideM>=0 && M.slides[curSlideM]) M.slides[curSlideM].preso = M.preso;   // 현재 장에 반영
   localStorage.setItem('mobile_last', JSON.stringify(M)); }catch(e){} }
 
 /* ===== 파일/예시 ===== */
