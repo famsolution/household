@@ -490,6 +490,8 @@
   <div id="tableWrap"></div>
   <div class="toolbar" style="margin-top:16px;">
     <button class="btn-present" onclick="enterPreso()">🎬 발표 모드 시작</button>
+    <button class="btn-ghost" onclick="addSlideFromEdit()" title="지금 보이는 담보·열 구성을 발표 슬라이드로 저장">📑 슬라이드로 추가 (<span id="slideCount">0</span>장)</button>
+    <button class="btn-ghost" onclick="clearSlides()" title="저장된 슬라이드 모두 비우기">슬라이드 비우기</button>
     <button class="btn-primary" onclick="saveImage()">💾 이미지로 저장 (PNG)</button>
     <button class="btn-ghost" onclick="copyImage()">📎 이미지 복사</button>
     <button class="btn-ghost" onclick="savePresoFile()">💼 고객용(발표) 파일로 저장</button>
@@ -505,6 +507,12 @@
       <button onclick="exitPreso()">✏️ 편집</button>
       <button id="p-undo" onclick="presoUndo()" disabled>↶</button>
       <button id="p-redo" onclick="presoRedo()" disabled>↷</button>
+      <span class="sep"></span>
+      <button id="s-prev" onclick="prevSlide()" title="이전 슬라이드(←)" disabled>◀</button>
+      <span class="ci" id="slideInd" style="font-weight:800; min-width:58px; justify-content:center; color:#1b64da;">슬라이드</span>
+      <button id="s-next" onclick="nextSlide()" title="다음 슬라이드(→)" disabled>▶</button>
+      <button id="s-add" onclick="addSlidePreso()" title="현재 화면을 새 슬라이드로 추가">➕장</button>
+      <button id="s-del" onclick="delSlide()" title="현재 슬라이드 삭제" disabled>🗑장</button>
       <span class="sep"></span>
       <button id="m-rowhl"   onclick="setPresoMode('rowhl')">🖍 행</button>
       <button id="m-colhl"   onclick="setPresoMode('colhl')">🖍 열</button>
@@ -534,7 +542,7 @@
       <span class="ci">배경<input type="color" id="stageBg"       value="#0f172a" oninput="applyPresoColors()"></span>
     </div>
   </div>
-  <div id="presoHint">🔗 연결(번호 왼쪽) / 🧮 값 합계(말풍선 오른쪽): 칸 클릭 · 같은 버튼 다시 누르면 '새 그룹' · 우클릭 = 빠른 메뉴 · Ctrl+휠 = 확대 · 🧊 옆 행·열 숫자로 고정</div>
+  <div id="presoHint">📑 슬라이드: ◀ ▶(또는 ← →)로 넘기기 · ➕장 = 현재 화면을 새 장으로 · 🔗 연결 / 🧮 값 합계: 칸 클릭 · 같은 버튼 다시 = '새 그룹' · 우클릭 = 빠른 메뉴 · Ctrl+휠 = 확대 · 🧊 옆 행·열 숫자로 고정</div>
   <div id="presoStage">
     <svg class="connLayer"></svg>
     <div class="bubbleLayer"></div>
@@ -595,6 +603,7 @@ function applyExcelSheet(){
     head: parsed.grid[0].map((cd,i)=>{ if(parsed.colW[i]) cd.w=parsed.colW[i]; return cd; }),
     rows: parsed.grid.slice(1).map((row,ri)=>({ cells:row, rh: parsed.rowH[ri+1]||undefined }))
   };
+  slides=[]; curSlide=-1;   // 새 표를 만들면 슬라이드 초기화
   buildTableModel(model);
 }
 
@@ -677,6 +686,7 @@ function makeCell(tag, cd){
 
 /* 문자열 격자 → 모델 변환 후 빌드(붙여넣기·예시·빈 시트용) */
 function buildTable(grid){
+  slides=[]; curSlide=-1;   // 새 표를 만들면 슬라이드 초기화
   buildTableModel({
     head: grid[0].map(t=>({h:textToHtml(t)})),
     rows: grid.slice(1).map(r=>({ cells: r.map(t=>({h:textToHtml(t)})) }))
@@ -721,6 +731,7 @@ function buildTableModel(m){
   if(m.mergeSpec) mergeSpec = m.mergeSpec.map(g=>({...g})); else captureMergeSpec();
   applyColVisibility();               // 감춘 열에 걸친 모든 병합을 남은 열로 재배치
   applyZoom();
+  updateSlideCount();
   autosave();
 }
 
@@ -1187,6 +1198,7 @@ function resetAll(){
   if(!confirm('현재 편집 중인 표를 비울까요? (저장한 시트는 그대로 남습니다)')) return;
   document.getElementById('pasteArea').value='';
   document.getElementById('tableWrap').innerHTML='';
+  slides=[]; curSlide=-1; updateSlideCount();
   ['sheetCard','visCard','optCard','resultCard'].forEach(id=> document.getElementById(id).style.display='none');
   localStorage.removeItem(LS_LAST);
 }
@@ -1363,7 +1375,8 @@ function serialize(){
     colHidden:[...colHidden],
     style:getStyleState(),
     mergeSpec: mergeSpec.map(g=>({...g})),
-    preso: (_presoSaved || currentPresoSettings())   // 발표 세팅(연결·강조·고정·합산) 보존
+    preso: (_presoSaved || currentPresoSettings()),   // 발표 세팅(연결·강조·고정·합산) 보존
+    slides: slides.map(s=>({ title:s.title, colHidden:(s.colHidden||[]).slice(), rowsHidden:(s.rowsHidden||[]).slice(), preso:s.preso }))   // 다중 슬라이드
   };
 }
 function deserialize(d){
@@ -1375,6 +1388,9 @@ function deserialize(d){
   }));
   buildTableModel({ head, rows, colHidden: d.colHidden, mergeSpec: d.mergeSpec });
   setStyleState(d.style);
+  slides = (d.slides||[]).map(s=>({ title:s.title||'슬라이드', colHidden:(s.colHidden||[]).slice(), rowsHidden:(s.rowsHidden||[]).slice(), preso:s.preso||{} }));
+  curSlide = slides.length ? 0 : -1;
+  updateSlideCount();
   _presoSaved = d.preso || null;   // 저장된 발표 세팅(연결·강조·고정)을 발표 진입 시 복원
   if(d.autoPreso) setTimeout(()=>{ if(confirm('고객용(발표) 파일입니다. 바로 발표 화면으로 열까요?')) enterPreso(); }, 350);
 }
@@ -1750,6 +1766,8 @@ function pushPresoHistory(){
   presoHist=presoHist.slice(0,presoIdx+1); presoHist.push(s); presoIdx=presoHist.length-1;
   if(presoHist.length>80){ presoHist.shift(); presoIdx--; }
   updatePresoUndo();
+  // 발표 중 효과 변경분을 현재 슬라이드에 즉시 반영(슬라이드 전환·복원 중 제외)
+  if(slides.length && curSlide>=0 && !_slideSwitching && !_presoRestoring) slides[curSlide].preso = currentPresoSettings();
 }
 function schedulePresoHistory(){ if(_presoRestoring) return; clearTimeout(_presoHistT); _presoHistT=setTimeout(pushPresoHistory,200); }
 function updatePresoUndo(){
@@ -1926,18 +1944,12 @@ function applyPresoSettings(s){
   if(preso.sumOn) refreshSum(); else { document.getElementById('sumPanel').classList.remove('on'); clearSumGlow(); }
   if(preso.freeze){ freezePreso(); requestAnimationFrame(()=>{ if(preso.freeze) freezePreso(); }); }   // 레이아웃 안정 후 위치 재계산
 }
-function enterPreso(){
-  const tbl = document.getElementById('tbl');
-  if(!tbl){ alert('먼저 표를 만들어 주세요.'); return; }
+/* 현재 편집표의 "보이는" 격자로 발표용 표를 만들고 세팅을 적용(슬라이드 전환에 재사용) */
+function buildPresoTableNow(settings){
   const grid = getVisibleGrid();
-  if(grid.rows.length===0){ alert('표시할 담보가 없습니다.'); return; }
   // 고정 추정 기본값: 머리행(제목+대분류+중분류) 행 수, 왼쪽 라벨 열 수
   preso._defFrzRows = (grid.hdrRows && grid.hdrRows.size) ? Math.max(...grid.hdrRows)+2 : 1;
   preso._defFrzCols = grid.labelCols || 1;
-
-  // 적용할 세팅: 불러온 파일의 발표 세팅(_presoSaved)이 있으면 그것, 없으면 직전 세션값을 유지
-  const settings = _presoSaved || currentPresoSettings();
-  _presoSaved = null;
 
   const stage = document.getElementById('presoStage');
   stage.querySelector('#presoTable')?.remove();
@@ -1951,11 +1963,118 @@ function enterPreso(){
   populateSumCols(grid);
   bindPresoEvents(newTbl);
   setPresoMode('rowhl');
-  document.getElementById('preso').classList.add('on');
   applyPresoSettings(settings);   // 연결·강조·고정·합산·말풍선 복원(파일/직전값)
   adjustPresoLayout();
-  presoHist=[]; presoIdx=-1; _presoRestoring=false; pushPresoHistory();   // 발표 모드 되돌리기 기준점
+  return grid;
 }
+function enterPreso(){
+  const tbl = document.getElementById('tbl');
+  if(!tbl){ alert('먼저 표를 만들어 주세요.'); return; }
+  document.getElementById('preso').classList.add('on');
+
+  // 슬라이드가 있으면 슬라이드 발표로 진입(현재/첫 슬라이드부터)
+  if(slides.length){
+    gotoSlide(curSlide>=0 ? curSlide : 0, true);
+    updateSlideUI();
+    return;
+  }
+
+  const grid = getVisibleGrid();
+  if(grid.rows.length===0){ document.getElementById('preso').classList.remove('on'); alert('표시할 담보가 없습니다.'); return; }
+  // 적용할 세팅: 불러온 파일의 발표 세팅(_presoSaved)이 있으면 그것, 없으면 직전 세션값을 유지
+  const settings = _presoSaved || currentPresoSettings();
+  _presoSaved = null;
+
+  buildPresoTableNow(settings);
+  presoHist=[]; presoIdx=-1; _presoRestoring=false; pushPresoHistory();   // 발표 모드 되돌리기 기준점
+  updateSlideUI();
+}
+
+/* ===================== 다중 슬라이드(발표 화면 여러 장) ===================== */
+let slides = [];          // [{title, colHidden:[...], rowsHidden:[bool...], preso:{...}}]
+let curSlide = -1;
+let _slideSwitching = false;
+
+/* 현재 편집표의 보임/숨김 구성(열·행)을 스냅샷 */
+function snapSlideView(){
+  const tbl=document.getElementById('tbl');
+  const rowsHidden = tbl ? [...tbl.tBodies[0].rows].map(tr=>tr.classList.contains('hidden-row')) : [];
+  return { colHidden:[...colHidden], rowsHidden };
+}
+/* 슬라이드의 열·행 구성을 편집표에 반영 */
+function applySlideFilter(s){
+  const tbl=document.getElementById('tbl'); if(!tbl||!s) return;
+  const ncol=tbl.tHead.rows[0].cells.length;
+  colHidden = (s.colHidden||[]).slice();
+  while(colHidden.length<ncol) colHidden.push(false);
+  if(colHidden.length>ncol) colHidden.length=ncol;
+  const bodyRows=[...tbl.tBodies[0].rows];
+  bodyRows.forEach((tr,i)=> tr.classList.toggle('hidden-row', !!(s.rowsHidden && s.rowsHidden[i])));
+  applyColVisibility();
+}
+/* 현재 발표 효과를 현재 슬라이드에 저장 */
+function captureCurSlidePreso(){
+  if(curSlide>=0 && curSlide<slides.length) slides[curSlide].preso = currentPresoSettings();
+}
+/* i번 슬라이드로 전환(편집표 구성→발표표 재생성→효과 복원) */
+function gotoSlide(i, skipSave){
+  if(i<0 || i>=slides.length) return;
+  if(!skipSave) captureCurSlidePreso();
+  _slideSwitching=true;
+  curSlide=i;
+  const s=slides[i];
+  applySlideFilter(s);
+  buildPresoTableNow(s.preso);
+  presoHist=[]; presoIdx=-1; _presoRestoring=false; pushPresoHistory();
+  _slideSwitching=false;
+  updateSlideUI();
+}
+function prevSlide(){ if(curSlide>0) gotoSlide(curSlide-1); }
+function nextSlide(){ if(curSlide<slides.length-1) gotoSlide(curSlide+1); }
+/* 편집 화면에서 "현재 보이는 구성"을 새 슬라이드로 추가 */
+function addSlideFromEdit(){
+  if(!document.getElementById('tbl')){ alert('먼저 표를 만들어 주세요.'); return; }
+  slides.push({ title:'슬라이드 '+(slides.length+1), ...snapSlideView(), preso: currentPresoSettings() });
+  if(curSlide<0) curSlide=0;
+  updateSlideCount(); scheduleAutosave();
+  alert(slides.length+'번 슬라이드로 추가했습니다. 지금 보이는 담보·열 구성이 이 슬라이드에 저장됩니다.\n(여러 장을 만든 뒤 발표 모드에서 ◀ ▶로 넘기세요.)');
+}
+/* 발표 중 현재 화면을 새 슬라이드로 추가(현재 다음에 삽입) */
+function addSlidePreso(){
+  if(!document.getElementById('presoTable')){ addSlideFromEdit(); return; }
+  captureCurSlidePreso();
+  const ns={ title:'슬라이드 '+(slides.length+1), ...snapSlideView(), preso: currentPresoSettings() };
+  if(curSlide<0){ slides.push(ns); curSlide=slides.length-1; }
+  else slides.splice(curSlide+1,0,ns);
+  curSlide = Math.min(curSlide+ (slides.length>1?1:0), slides.length-1);
+  updateSlideUI(); updateSlideCount(); scheduleAutosave();
+}
+function delSlide(){
+  if(!slides.length){ alert('삭제할 슬라이드가 없습니다.'); return; }
+  if(!confirm((curSlide+1)+'번 슬라이드를 삭제할까요?')) return;
+  const at=curSlide;
+  slides.splice(at,1);
+  if(slides.length===0){ curSlide=-1; updateSlideUI(); updateSlideCount(); scheduleAutosave(); return; }
+  gotoSlide(Math.min(at, slides.length-1), true);   // 삭제한 자리(또는 마지막)로 이동
+  updateSlideCount(); scheduleAutosave();
+}
+function clearSlides(){
+  if(!slides.length){ alert('슬라이드가 없습니다.'); return; }
+  if(!confirm('저장된 슬라이드를 모두 비울까요?')) return;
+  slides=[]; curSlide=-1; updateSlideUI(); updateSlideCount(); scheduleAutosave();
+}
+/* 발표바 슬라이드 표시기 갱신 */
+function updateSlideUI(){
+  const ind=document.getElementById('slideInd'), p=document.getElementById('s-prev'), n=document.getElementById('s-next'), d=document.getElementById('s-del');
+  if(!ind) return;
+  if(slides.length){ ind.textContent=(curSlide+1)+' / '+slides.length; }
+  else ind.textContent='슬라이드';
+  if(p) p.disabled = !(curSlide>0);
+  if(n) n.disabled = !(slides.length && curSlide<slides.length-1);
+  if(d) d.disabled = !slides.length;
+}
+/* 편집카드 슬라이드 개수 배지 갱신 */
+function updateSlideCount(){ const b=document.getElementById('slideCount'); if(b) b.textContent=slides.length; }
 /* 하단 바가 표를 가리지 않도록 아래 여백을 바 높이에 맞춤 */
 function adjustPresoLayout(){
   const bar=document.getElementById('presoBar'), preso0=document.getElementById('preso');
@@ -2407,6 +2526,17 @@ function savePresoImage(){
 
 /* ESC 로 발표 모드 종료 */
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') exitPreso(); });
+
+/* 발표 중 슬라이드 넘기기: ← → / PageUp PageDown (말풍선 편집 중 제외) */
+document.addEventListener('keydown', e=>{
+  if(!document.getElementById('preso').classList.contains('on')) return;
+  if(!slides.length) return;
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  const ae=document.activeElement;
+  if(ae && (ae.isContentEditable || ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA')) return;
+  if(e.key==='ArrowRight' || e.key==='PageDown'){ e.preventDefault(); nextSlide(); }
+  else if(e.key==='ArrowLeft' || e.key==='PageUp'){ e.preventDefault(); prevSlide(); }
+});
 </script>
 </body>
 </html>
